@@ -1,7 +1,19 @@
-<meta name="claude:viewport-fit-sides" content="cover">
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Пульт смены демо</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;font:14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
 <style>
   /* Layout: sticky control bar с вкладками; ниже — активная вкладка (Смена / Календарь / Обмены) в одну колонку шириной до 1000px */
   /* Зелёный акцент; тема белая по умолчанию, чёрная по переключателю/системе. Офис — бордовый */
@@ -299,7 +311,8 @@
     opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:50;max-width:88vw;text-align:center}
   #toast.show{opacity:1;transform:translateX(-50%) translateY(-2px)}
 </style>
-
+</head>
+<body>
 <div class="bar">
   <div class="bar-in">
     <div class="bar-top">
@@ -1045,3 +1058,5 @@ window.__PROFILES__={"me": "Озеров", "op:S1": "Воробьев", "op:S2":
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",start); else start();
 })();
 </script>
+</body>
+</html>
