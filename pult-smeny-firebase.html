@@ -1,0 +1,1108 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Пульт смены</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;font:14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
+<style>
+  /* Layout: sticky control bar с вкладками; ниже — активная вкладка (Смена / Календарь / Обмены) в одну колонку шириной до 1000px */
+  /* Зелёный акцент; тема белая по умолчанию, чёрная по переключателю/системе. Офис — бордовый */
+  :root{
+    --bg:#f4f7f5; --surface:#ffffff; --surface-2:#eef2f0; --border:#dde4e0;
+    --fg:#17241d; --fg-muted:#59685f; --fg-faint:#8a988f;
+    --accent:#1f9d57; --accent-fg:#ffffff; --accent-soft:#e4f3ea;
+    --on:#1f9d57; --on-bg:#e4f3ea;
+    --lunch:#bf7d16; --lunch-bg:#faeedb;
+    --off:#76827a; --off-bg:#eaeeec;
+    --night:#5666c6; --night-bg:#e8eaf8;
+    --office:#9e2a46; --office-bg:#f8e4e9;
+    --danger:#c43c3c; --danger-bg:#fbe8e8;
+    --shadow:0 1px 2px rgba(20,35,25,.06), 0 6px 20px rgba(20,35,25,.05);
+    --font:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+    --bg:#060908; --surface:#0d120e; --surface-2:#151c16; --border:#232d25;
+    --fg:#e7f1ea; --fg-muted:#8ba294; --fg-faint:#5c6e63;
+    --accent:#2fd176; --accent-fg:#04140a; --accent-soft:#102a1b;
+    --on:#2fd176; --on-bg:#102a1b;
+    --lunch:#a9da50; --lunch-bg:#1f2a10;
+    --off:#6a7c70; --off-bg:#171f18;
+    --night:#8f9cf0; --night-bg:#1b2140;
+    --office:#e8718c; --office-bg:#2e151b;
+    --danger:#e0645c; --danger-bg:#2a1513;
+    --shadow:0 1px 2px rgba(0,0,0,.55), 0 10px 30px rgba(0,0,0,.5);
+    color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#060908; --surface:#0d120e; --surface-2:#151c16; --border:#232d25;
+    --fg:#e7f1ea; --fg-muted:#8ba294; --fg-faint:#5c6e63;
+    --accent:#2fd176; --accent-fg:#04140a; --accent-soft:#102a1b;
+    --on:#2fd176; --on-bg:#102a1b;
+    --lunch:#a9da50; --lunch-bg:#1f2a10;
+    --off:#6a7c70; --off-bg:#171f18;
+    --night:#8f9cf0; --night-bg:#1b2140;
+    --office:#e8718c; --office-bg:#2e151b;
+    --danger:#e0645c; --danger-bg:#2a1513;
+    --shadow:0 1px 2px rgba(0,0,0,.55), 0 10px 30px rgba(0,0,0,.5);
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--fg);font-family:var(--font);line-height:1.45;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{margin:0;text-wrap:balance}
+  button{font-family:inherit;cursor:pointer}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+  body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+
+  .bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--border)}
+  .bar-in{max-width:1000px;margin:0 auto;padding-top:13px;
+    padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .bar-top{display:flex;align-items:center;gap:12px}
+  .mark{width:30px;height:30px;border-radius:8px;background:var(--accent);flex:none;display:grid;place-items:center}
+  .mark span{width:11px;height:11px;border-radius:50%;background:var(--accent-fg)}
+  .bar h1{font-size:17px;font-weight:700;letter-spacing:-.01em}
+  .bar .sub{font-size:12px;color:var(--fg-muted);font-weight:500}
+  .live{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--fg-muted);font-variant-numeric:tabular-nums}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--off)}
+  .dot.ok{background:var(--on)}
+  .dot.ok.anim{animation:pulse 2.4s ease-out infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,209,118,.5)}100%{box-shadow:0 0 0 7px rgba(47,209,118,0)}}
+  @media (prefers-reduced-motion:reduce){.dot.anim{animation:none}}
+
+  .tabs{display:flex;gap:4px;margin-top:12px}
+  .tab{position:relative;appearance:none;border:none;background:none;color:var(--fg-muted);font-size:13.5px;font-weight:600;white-space:nowrap;
+    padding:10px 4px 12px;border-bottom:2px solid transparent;flex:1;max-width:170px;transition:color .15s}
+  @media (max-width:380px){.tab{font-size:12.5px}}
+  .tab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+  .tab .badge{display:inline-block;min-width:18px;padding:0 5px;height:18px;line-height:18px;border-radius:9px;
+    background:var(--danger);color:#fff;font-size:11px;font-weight:700;margin-left:6px;vertical-align:1px}
+
+  main{max-width:1000px;margin:0 auto;padding-block:18px 56px;
+    padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .pane{display:flex;flex-direction:column;gap:16px}
+  .pane[hidden]{display:none}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow)}
+  .sec-h{display:flex;align-items:baseline;gap:10px;padding:16px 18px 0}
+  .sec-h h2{font-size:15px;font-weight:700;letter-spacing:-.01em}
+  .sec-h .count{font-size:12px;color:var(--fg-faint);font-weight:600;font-variant-numeric:tabular-nums;margin-left:auto}
+  .sec-body{padding:12px 18px 18px}
+
+  /* Личная карточка */
+  .me{padding:18px}
+  .me-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .ava{width:46px;height:46px;border-radius:50%;flex:none;background:var(--surface-2);display:grid;place-items:center;font-weight:600;font-size:16px;color:var(--fg-muted);overflow:hidden}
+  .ava img{width:100%;height:100%;object-fit:cover}
+  .me-id .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--fg-faint);font-weight:600}
+  .me-id .nm{font-size:19px;font-weight:600;letter-spacing:-.01em}
+  .me-state{margin-left:auto;text-align:right}
+  .me-timer{font-family:var(--mono);font-size:13px;color:var(--fg-muted);font-variant-numeric:tabular-nums;margin-top:6px}
+  .me-timer b{color:var(--fg);font-weight:600}
+  .actions{margin-top:16px;display:flex;flex-wrap:wrap;gap:10px}
+  .claim{margin-top:16px;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:13px}
+  .claim-t{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--fg-muted);margin-bottom:10px}
+  .claim-t .ic{width:16px;height:16px;color:var(--accent)}
+
+  .btn{border:1px solid var(--border);background:var(--surface-2);color:var(--fg);font-size:14px;font-weight:600;
+    padding:11px 16px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform .05s,background .15s,border-color .15s}
+  .btn:hover{border-color:var(--fg-faint)}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.5;cursor:default;transform:none}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .btn.primary:hover{filter:brightness(1.05)}
+  .btn.on{background:var(--on-bg);border-color:transparent;color:var(--on)}
+  .btn.lunch{background:var(--lunch-bg);border-color:transparent;color:var(--lunch)}
+  .btn.danger{background:var(--danger-bg);border-color:transparent;color:var(--danger)}
+  .btn.ghost{background:transparent}
+  .btn.sm{padding:8px 13px;font-size:13px}
+  .btn.block{width:100%}
+  .ic{width:16px;height:16px;flex:none}
+
+  .pill{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;padding:6px 12px;border-radius:999px;white-space:nowrap}
+  .pill::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+  .pill.on{background:var(--on-bg);color:var(--on)}
+  .pill.lunch{background:var(--lunch-bg);color:var(--lunch)}
+  .pill.off{background:var(--off-bg);color:var(--off)}
+
+  ul.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+  .row{display:flex;align-items:center;gap:12px;padding:10px 8px;border-radius:10px;min-width:0}
+  .row:hover{background:var(--surface-2)}
+  .row .ava{width:34px;height:34px;font-size:13px}
+  .row .who{min-width:0;flex:1}
+  .row .who .nm{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .you{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);padding:1px 6px;border-radius:5px;margin-left:6px;vertical-align:middle}
+  .together{color:var(--on);background:var(--on-bg)}
+  .daygrp{font-size:12px;font-weight:700;letter-spacing:.02em;color:var(--fg-muted);text-transform:uppercase;margin:4px 2px 2px}
+  .row .who .t{font-size:12px;color:var(--fg-faint);font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .row .rt{font-family:var(--mono);font-size:12.5px;color:var(--fg-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+  /* История часов */
+  .hist{display:flex;flex-direction:column;gap:1px}
+  .hbar-row{display:grid;grid-template-columns:92px 1fr auto;align-items:center;gap:10px;padding:5px 0}
+  .hbar-row .d{font-size:12.5px;color:var(--fg-muted);font-variant-numeric:tabular-nums}
+  .hbar-row .track{height:9px;border-radius:5px;background:var(--surface-2);overflow:hidden}
+  .hbar-row .fill{height:100%;background:var(--accent);border-radius:5px}
+  .hbar-row .v{font-family:var(--mono);font-size:12.5px;color:var(--fg);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .hbar-row.today .d{color:var(--accent);font-weight:600}
+
+  /* Календарь */
+  .day{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .day+.day{margin-top:11px}
+  .day.is-today{border-color:var(--accent)}
+  .mnav{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .navbtn{width:40px;height:40px;flex:none;border:1px solid var(--border);background:var(--surface);color:var(--fg);border-radius:10px;display:grid;place-items:center}
+  .navbtn:hover:not(:disabled){border-color:var(--accent)}
+  .navbtn:disabled{opacity:.4;cursor:default}
+  .navbtn .ic{width:18px;height:18px}
+  .mlabel{flex:1;text-align:center;font-size:16px;font-weight:700;letter-spacing:-.01em;text-transform:capitalize}
+  .day-h{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--surface-2)}
+  .day-h .dow{font-weight:700;font-size:14px;text-transform:capitalize}
+  .day-h .dt{font-size:12.5px;color:var(--fg-muted);font-variant-numeric:tabular-nums}
+  .day-h .tdlabel{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:6px}
+  .day-h .add{margin-left:auto}
+  .day-body{padding:10px 12px;display:flex;flex-direction:column;gap:7px}
+  .day-empty{color:var(--fg-faint);font-size:13px;padding:4px 2px}
+  .shift{display:flex;align-items:center;gap:11px;width:100%;text-align:left;border:1px solid var(--border);background:var(--surface);
+    border-radius:10px;padding:9px 12px;color:var(--fg);transition:border-color .12s,background .12s}
+  .shift:hover{border-color:var(--accent)}
+  .shift.mine{border-color:color-mix(in srgb,var(--accent) 35%,transparent);background:color-mix(in srgb,var(--accent) 9%,transparent)}
+  .shift .bar-k{width:4px;align-self:stretch;border-radius:3px;background:var(--off);flex:none}
+  .shift.k-day .bar-k{background:var(--on)}
+  .shift.k-night .bar-k{background:var(--night)}
+  .shift .s-who{min-width:0;flex:1}
+  .shift .s-who .nm{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .shift .s-who .s-sub{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--office);margin-top:3px}
+  .shift .s-who .s-sub .ic{width:13px;height:13px}
+  .shift.office{box-shadow:inset 3px 0 0 var(--office)}
+  .shift .s-time{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums;color:var(--fg-muted);white-space:nowrap}
+  .shift .s-time .s-ki{width:14px;height:14px;flex:none}
+  .shift.k-day .s-time .s-ki{color:var(--on)} .shift.k-night .s-time .s-ki{color:var(--night)}
+  .shift .chev{color:var(--fg-faint);flex:none}
+
+  /* Кнопка темы */
+  .iconbtn{width:34px;height:34px;flex:none;border:1px solid var(--border);background:var(--surface);color:var(--fg-muted);border-radius:9px;display:grid;place-items:center;margin-left:10px}
+  .iconbtn:hover{border-color:var(--accent);color:var(--fg)}
+  .iconbtn .ic{width:17px;height:17px}
+
+  /* Месячная сетка календаря */
+  .calfilter{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+  .calfilter label{font-size:12px;font-weight:600;color:var(--fg-muted);white-space:nowrap}
+  .calfilter select{flex:1;min-width:0;font:inherit;font-size:14px;color:var(--fg);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 11px}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;margin:12px 2px 10px;font-size:12px;color:var(--fg-muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .legend .lg-day{background:var(--on)} .legend .lg-night{background:var(--night)} .legend .lg-off{background:var(--office)}
+  .cal-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
+  .cal-dow span{text-align:center;font-size:11px;font-weight:600;color:var(--fg-faint);padding:3px 0}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .cal-cell{min-height:58px;border:1px solid var(--border);border-radius:9px;background:var(--surface);padding:5px 4px;display:flex;flex-direction:column;gap:3px;cursor:pointer;transition:border-color .12s;overflow:hidden}
+  .cal-cell.blank{background:transparent;border-color:transparent;cursor:default}
+  .cal-cell:not(.blank):hover{border-color:var(--accent)}
+  .cal-cell.today{border-color:var(--accent)}
+  .cal-cell.has{box-shadow:none}
+  .cal-cell .dn{font-size:12px;font-weight:600;color:var(--fg-muted);line-height:1;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:3px}
+  .cal-cell.today .dn{color:var(--accent)}
+  .cal-cell.office .dn{color:var(--office);font-weight:700}
+  .cal-cell .dots{display:flex;flex-wrap:wrap;gap:3px;margin-top:auto}
+  .cdot{width:8px;height:8px;border-radius:50%;background:var(--off)}
+  .cdot.day{background:var(--on)} .cdot.night{background:var(--night)}
+  .cdot.mine{box-shadow:0 0 0 2px var(--surface),0 0 0 3.3px var(--accent)}
+  .cal-cell .more{font-size:9px;color:var(--fg-faint);font-weight:600}
+
+  /* Недельная строка часов */
+  .wk{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+  .wkd{border:1px solid var(--border);border-radius:9px;padding:7px 2px 8px;min-height:74px;background:var(--surface);
+    display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center}
+  .wkd.today{border-color:var(--accent)}
+  .wkd.future{opacity:.45}
+  .wkd .wd{font-size:10px;font-weight:700;color:var(--fg-faint);text-transform:uppercase;letter-spacing:.03em}
+  .wkd .wn{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+  .wkd.today .wn{color:var(--accent)}
+  .wkd .wk-ic{width:15px;height:15px;margin-top:1px}
+  .wkd.day .wk-ic{color:var(--on)} .wkd.night .wk-ic{color:var(--night)}
+  .wkd .wh{font-size:10.5px;font-family:var(--mono);color:var(--fg-muted);font-variant-numeric:tabular-nums}
+  .wkd .wdash{color:var(--fg-faint);font-size:12px;margin-top:2px}
+  .wk-sum{margin-top:12px;font-size:13px;color:var(--fg-muted)}
+  .wk-sum b{color:var(--fg);font-weight:700}
+
+  /* Мини-календарь выбора смены в обмене */
+  .pick{border:1px solid var(--border);border-radius:11px;padding:11px;background:var(--surface)}
+  .pick-nav{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .pick-nav .mlabel{font-size:13.5px}
+  .pick-nav .navbtn{width:32px;height:32px}
+  .pick-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+  .pick-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px}
+  .pick-dow span{text-align:center;font-size:10px;font-weight:600;color:var(--fg-faint)}
+  .pc{min-height:42px;border:1px solid transparent;border-radius:8px;padding:3px 2px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--fg-faint)}
+  .pc.blank{}
+  .pc .pn{font-size:11px;font-weight:600;color:var(--fg-muted);font-variant-numeric:tabular-nums}
+  .pc.has{cursor:pointer;background:var(--surface-2);border-color:var(--border);color:var(--fg)}
+  .pc.has:hover{border-color:var(--accent)}
+  .pc.has .pn{color:var(--fg)}
+  .pc.sel{background:var(--accent);border-color:var(--accent)}
+  .pc.sel .pn,.pc.sel .pk{color:var(--accent-fg)}
+  .pc .pk{display:inline-flex;align-items:center;gap:2px;font-size:9px;font-weight:600;line-height:1}
+  .pc .pk .ic{width:10px;height:10px}
+  .pc.k-day .pk{color:var(--on)} .pc.k-night .pk{color:var(--night)}
+  .noswap{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:1px dashed var(--border);background:transparent;color:var(--fg-muted);
+    font-size:13px;font-weight:600;padding:10px;border-radius:9px;margin-top:10px}
+  .noswap.on{border-style:solid;border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+
+  /* Формы */
+  form.panel{display:flex;flex-direction:column;gap:11px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+  form.panel[hidden]{display:none}
+  label.fl{font-size:12px;font-weight:600;color:var(--fg-muted);display:block;margin-bottom:5px}
+  input.ti,select.se,input[type=date].ti,input[type=time].ti{width:100%;font:inherit;font-size:14px;color:var(--fg);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 12px}
+  input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:transparent}
+  .fr{display:flex;gap:10px;flex-wrap:wrap}
+  .fr>*{flex:1;min-width:120px}
+  .presets{display:flex;gap:8px;flex-wrap:wrap}
+  .chipbtn{border:1px solid var(--border);background:var(--surface);color:var(--fg-muted);font-size:12.5px;font-weight:600;padding:7px 11px;border-radius:8px}
+  .chipbtn:hover{border-color:var(--accent);color:var(--fg)}
+
+  /* Обмены / уведомления */
+  .swap{border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:11px}
+  .swap.incoming{border-color:var(--accent);background:var(--accent-soft)}
+  .swap-ttl{font-size:13px;color:var(--fg-muted)}
+  .swap-ttl b{color:var(--fg)}
+  .trade{display:flex;align-items:stretch;gap:10px}
+  .trade .leg{flex:1;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 11px}
+  .trade .leg .cap{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--fg-faint);font-weight:600;margin-bottom:3px}
+  .trade .leg .val{font-size:13px;font-weight:600;line-height:1.3}
+  .trade .leg .tm{font-family:var(--mono);font-size:12.5px;color:var(--fg-muted);font-variant-numeric:tabular-nums}
+  .trade .arr{align-self:center;color:var(--fg-faint);flex:none}
+  .swap-foot{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .swap .verdict{font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+  .verdict.ok{color:var(--on)} .verdict.no{color:var(--danger)}
+  .dismiss{margin-left:auto;appearance:none;border:none;background:none;color:var(--fg-faint);font-size:18px;line-height:1;padding:4px;border-radius:6px}
+  .dismiss:hover{color:var(--danger)}
+
+  .empty{text-align:center;color:var(--fg-muted);font-size:14px;padding:26px 12px;line-height:1.55}
+  .empty svg{width:34px;height:34px;color:var(--fg-faint);margin-bottom:8px}
+  .note-info{font-size:12.5px;color:var(--fg-muted);background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:10px 13px;display:flex;gap:9px;align-items:flex-start}
+  .note-info svg{width:16px;height:16px;flex:none;color:var(--accent);margin-top:1px}
+
+  /* Модалка обмена */
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:40;display:flex;align-items:flex-end;justify-content:center;padding:0}
+  .scrim[hidden]{display:none}
+  @media (min-width:560px){.scrim{align-items:center;padding:20px}}
+  .sheet{background:var(--surface);width:100%;max-width:460px;border-radius:16px 16px 0 0;box-shadow:var(--shadow);
+    padding:18px;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;max-height:88vh;overflow:auto}
+  @media (min-width:560px){.sheet{border-radius:16px}}
+  .sheet h3{font-size:16px;font-weight:700}
+  .sheet .pivot{background:var(--surface-2);border-radius:10px;padding:11px 13px;font-size:13px}
+  .sheet .pivot .nm{font-weight:600}
+
+  #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));
+    background:var(--fg);color:var(--bg);font-size:13px;font-weight:500;padding:10px 16px;border-radius:10px;box-shadow:var(--shadow);
+    opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:50;max-width:88vw;text-align:center}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(-2px)}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+  "use strict";
+  var CONFIG={"apiKey": "AIzaSyCXUfNTkbAq7YnFr3C4TMZQhiQPtD7ZMHI", "authDomain": "support-smena.firebaseapp.com", "projectId": "support-smena", "storageBucket": "support-smena.firebasestorage.app", "messagingSenderId": "742285679623", "appId": "1:742285679623:web:ee1c02523b9ed751a45ea2", "measurementId": "G-HEMR77V4LD"};
+  var SEED={"imp_2026-11-01_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-01", "start": "09:00", "end": "21:00", "createdAt": 1001}, "imp_2026-11-04_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-04", "start": "08:00", "end": "21:00", "createdAt": 1002}, "imp_2026-11-05_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-05", "start": "09:00", "end": "21:00", "createdAt": 1003}, "imp_2026-11-06_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-06", "start": "09:00", "end": "21:00", "createdAt": 1004}, "imp_2026-11-08_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-08", "start": "08:00", "end": "21:00", "createdAt": 1005}, "imp_2026-11-12_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-12", "start": "21:00", "end": "09:00", "createdAt": 1006}, "imp_2026-11-13_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-13", "start": "21:00", "end": "09:00", "createdAt": 1007}, "imp_2026-11-16_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-16", "start": "09:00", "end": "21:00", "createdAt": 1008}, "imp_2026-11-20_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-20", "start": "09:00", "end": "21:00", "createdAt": 1009}, "imp_2026-11-21_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-21", "start": "09:00", "end": "21:00", "createdAt": 1010}, "imp_2026-11-22_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-22", "start": "09:00", "end": "21:00", "createdAt": 1011}, "imp_2026-11-24_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-24", "start": "09:00", "end": "21:00", "createdAt": 1012}, "imp_2026-11-27_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-27", "start": "09:00", "end": "21:00", "createdAt": 1013}, "imp_2026-11-28_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-28", "start": "09:00", "end": "21:00", "createdAt": 1014}, "imp_2026-11-29_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-11-29", "start": "09:00", "end": "21:00", "createdAt": 1015}, "imp_2026-11-01_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-01", "start": "21:00", "end": "09:00", "createdAt": 1016}, "imp_2026-11-04_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-04", "start": "08:00", "end": "21:00", "createdAt": 1017}, "imp_2026-11-05_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-05", "start": "09:00", "end": "21:00", "createdAt": 1018}, "imp_2026-11-07_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-07", "start": "08:00", "end": "21:00", "createdAt": 1019}, "imp_2026-11-08_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-08", "start": "09:00", "end": "21:00", "createdAt": 1020}, "imp_2026-11-09_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-09", "start": "09:00", "end": "21:00", "createdAt": 1021}, "imp_2026-11-13_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-13", "start": "09:00", "end": "21:00", "createdAt": 1022}, "imp_2026-11-14_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-14", "start": "09:00", "end": "21:00", "createdAt": 1023}, "imp_2026-11-16_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-16", "start": "21:00", "end": "09:00", "createdAt": 1024}, "imp_2026-11-17_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-17", "start": "21:00", "end": "09:00", "createdAt": 1025}, "imp_2026-11-20_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-20", "start": "21:00", "end": "09:00", "createdAt": 1026}, "imp_2026-11-21_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-21", "start": "21:00", "end": "09:00", "createdAt": 1027}, "imp_2026-11-25_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-25", "start": "09:00", "end": "21:00", "createdAt": 1028}, "imp_2026-11-28_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-28", "start": "09:00", "end": "21:00", "createdAt": 1029}, "imp_2026-11-29_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-11-29", "start": "09:00", "end": "21:00", "createdAt": 1030}, "imp_2026-11-01_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-01", "start": "09:00", "end": "21:00", "createdAt": 1031}, "imp_2026-11-04_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-04", "start": "20:00", "end": "09:00", "createdAt": 1032}, "imp_2026-11-05_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-05", "start": "21:00", "end": "09:00", "createdAt": 1033}, "imp_2026-11-07_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-07", "start": "09:00", "end": "21:00", "createdAt": 1034}, "imp_2026-11-08_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-08", "start": "20:00", "end": "09:00", "createdAt": 1035}, "imp_2026-11-09_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-09", "start": "21:00", "end": "09:00", "createdAt": 1036}, "imp_2026-11-12_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-12", "start": "09:00", "end": "21:00", "createdAt": 1037}, "imp_2026-11-13_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-13", "start": "09:00", "end": "21:00", "createdAt": 1038}, "imp_2026-11-15_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-15", "start": "09:00", "end": "21:00", "createdAt": 1039}, "imp_2026-11-17_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-17", "start": "09:00", "end": "21:00", "createdAt": 1040}, "imp_2026-11-20_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-20", "start": "09:00", "end": "21:00", "createdAt": 1041}, "imp_2026-11-24_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-24", "start": "21:00", "end": "09:00", "createdAt": 1042}, "imp_2026-11-25_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-25", "start": "21:00", "end": "09:00", "createdAt": 1043}, "imp_2026-11-28_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-28", "start": "21:00", "end": "09:00", "createdAt": 1044}, "imp_2026-11-29_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-11-29", "start": "21:00", "end": "09:00", "createdAt": 1045}, "imp_2026-11-02_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-02", "start": "08:00", "end": "21:00", "createdAt": 1046}, "imp_2026-11-03_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-03", "start": "09:00", "end": "21:00", "createdAt": 1047}, "imp_2026-11-06_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-06", "start": "08:00", "end": "21:00", "createdAt": 1048}, "imp_2026-11-10_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-10", "start": "21:00", "end": "09:00", "createdAt": 1049}, "imp_2026-11-11_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-11", "start": "21:00", "end": "09:00", "createdAt": 1050}, "imp_2026-11-14_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-14", "start": "21:00", "end": "09:00", "createdAt": 1051}, "imp_2026-11-15_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-15", "start": "21:00", "end": "09:00", "createdAt": 1052}, "imp_2026-11-18_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-18", "start": "09:00", "end": "21:00", "createdAt": 1053}, "imp_2026-11-19_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-19", "start": "09:00", "end": "21:00", "createdAt": 1054}, "imp_2026-11-21_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-21", "start": "09:00", "end": "21:00", "createdAt": 1055}, "imp_2026-11-22_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-22", "start": "09:00", "end": "21:00", "createdAt": 1056}, "imp_2026-11-23_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-23", "start": "09:00", "end": "21:00", "createdAt": 1057}, "imp_2026-11-26_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-26", "start": "21:00", "end": "09:00", "createdAt": 1058}, "imp_2026-11-27_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-27", "start": "21:00", "end": "09:00", "createdAt": 1059}, "imp_2026-11-30_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-11-30", "start": "09:00", "end": "21:00", "createdAt": 1060}, "imp_2026-11-02_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-02", "start": "20:00", "end": "09:00", "createdAt": 1061}, "imp_2026-11-03_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-03", "start": "21:00", "end": "09:00", "createdAt": 1062}, "imp_2026-11-06_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-06", "start": "20:00", "end": "09:00", "createdAt": 1063}, "imp_2026-11-07_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-07", "start": "21:00", "end": "09:00", "createdAt": 1064}, "imp_2026-11-10_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-10", "start": "09:00", "end": "21:00", "createdAt": 1065}, "imp_2026-11-11_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-11", "start": "09:00", "end": "21:00", "createdAt": 1066}, "imp_2026-11-14_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-14", "start": "09:00", "end": "21:00", "createdAt": 1067}, "imp_2026-11-15_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-15", "start": "09:00", "end": "21:00", "createdAt": 1068}, "imp_2026-11-18_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-18", "start": "21:00", "end": "09:00", "createdAt": 1069}, "imp_2026-11-19_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-19", "start": "21:00", "end": "09:00", "createdAt": 1070}, "imp_2026-11-22_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-22", "start": "21:00", "end": "09:00", "createdAt": 1071}, "imp_2026-11-23_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-23", "start": "21:00", "end": "09:00", "createdAt": 1072}, "imp_2026-11-26_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-26", "start": "09:00", "end": "21:00", "createdAt": 1073}, "imp_2026-11-27_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-27", "start": "09:00", "end": "21:00", "createdAt": 1074}, "imp_2026-11-30_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-11-30", "start": "21:00", "end": "09:00", "createdAt": 1075}, "imp_2026-12-02_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-02", "start": "21:00", "end": "09:00", "createdAt": 1076}, "imp_2026-12-03_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-03", "start": "21:00", "end": "09:00", "createdAt": 1077}, "imp_2026-12-06_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-06", "start": "21:00", "end": "09:00", "createdAt": 1078}, "imp_2026-12-07_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-07", "start": "21:00", "end": "09:00", "createdAt": 1079}, "imp_2026-12-10_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-10", "start": "09:00", "end": "19:00", "createdAt": 1080}, "imp_2026-12-11_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-11", "start": "09:00", "end": "21:00", "createdAt": 1081}, "imp_2026-12-14_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-14", "start": "09:00", "end": "21:00", "createdAt": 1082}, "imp_2026-12-18_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-18", "start": "09:00", "end": "21:00", "createdAt": 1083}, "imp_2026-12-19_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-19", "start": "09:00", "end": "21:00", "createdAt": 1084}, "imp_2026-12-20_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-20", "start": "09:00", "end": "21:00", "createdAt": 1085}, "imp_2026-12-22_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-22", "start": "21:00", "end": "09:00", "createdAt": 1086}, "imp_2026-12-23_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-23", "start": "21:00", "end": "09:00", "createdAt": 1087}, "imp_2026-12-26_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-26", "start": "21:00", "end": "09:00", "createdAt": 1088}, "imp_2026-12-27_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-27", "start": "21:00", "end": "09:00", "createdAt": 1089}, "imp_2026-12-30_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-30", "start": "09:00", "end": "21:00", "createdAt": 1090}, "imp_2026-12-31_S1": {"userId": "imp:S1", "name": "Воробьев", "date": "2026-12-31", "start": "09:00", "end": "21:00", "createdAt": 1091}, "imp_2026-12-02_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-02", "start": "09:00", "end": "19:00", "createdAt": 1092}, "imp_2026-12-03_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-03", "start": "09:00", "end": "21:00", "createdAt": 1093}, "imp_2026-12-05_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-05", "start": "09:00", "end": "21:00", "createdAt": 1094}, "imp_2026-12-06_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-06", "start": "09:00", "end": "21:00", "createdAt": 1095}, "imp_2026-12-07_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-07", "start": "09:00", "end": "21:00", "createdAt": 1096}, "imp_2026-12-10_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-10", "start": "21:00", "end": "09:00", "createdAt": 1097}, "imp_2026-12-11_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-11", "start": "21:00", "end": "09:00", "createdAt": 1098}, "imp_2026-12-13_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-13", "start": "09:00", "end": "21:00", "createdAt": 1099}, "imp_2026-12-15_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-15", "start": "09:00", "end": "21:00", "createdAt": 1100}, "imp_2026-12-18_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-18", "start": "09:00", "end": "21:00", "createdAt": 1101}, "imp_2026-12-19_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-19", "start": "09:00", "end": "21:00", "createdAt": 1102}, "imp_2026-12-25_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-25", "start": "09:00", "end": "21:00", "createdAt": 1103}, "imp_2026-12-26_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-26", "start": "09:00", "end": "21:00", "createdAt": 1104}, "imp_2026-12-27_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-27", "start": "09:00", "end": "21:00", "createdAt": 1105}, "imp_2026-12-30_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-30", "start": "21:00", "end": "09:00", "createdAt": 1106}, "imp_2026-12-31_S2": {"userId": "imp:S2", "name": "Анифер", "date": "2026-12-31", "start": "21:00", "end": "09:00", "createdAt": 1107}, "imp_2026-12-02_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-02", "start": "09:00", "end": "21:00", "createdAt": 1108}, "imp_2026-12-03_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-03", "start": "09:00", "end": "19:00", "createdAt": 1109}, "imp_2026-12-04_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-04", "start": "09:00", "end": "21:00", "createdAt": 1110}, "imp_2026-12-06_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-06", "start": "09:00", "end": "21:00", "createdAt": 1111}, "imp_2026-12-07_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-07", "start": "09:00", "end": "21:00", "createdAt": 1112}, "imp_2026-12-10_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-10", "start": "09:00", "end": "21:00", "createdAt": 1113}, "imp_2026-12-11_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-11", "start": "09:00", "end": "21:00", "createdAt": 1114}, "imp_2026-12-12_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-12", "start": "09:00", "end": "21:00", "createdAt": 1115}, "imp_2026-12-14_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-14", "start": "21:00", "end": "09:00", "createdAt": 1116}, "imp_2026-12-15_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-15", "start": "21:00", "end": "09:00", "createdAt": 1117}, "imp_2026-12-18_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-18", "start": "21:00", "end": "09:00", "createdAt": 1118}, "imp_2026-12-19_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-19", "start": "21:00", "end": "09:00", "createdAt": 1119}, "imp_2026-12-22_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-22", "start": "09:00", "end": "21:00", "createdAt": 1120}, "imp_2026-12-23_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-23", "start": "09:00", "end": "21:00", "createdAt": 1121}, "imp_2026-12-26_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-26", "start": "09:00", "end": "21:00", "createdAt": 1122}, "imp_2026-12-27_S3": {"userId": "imp:S3", "name": "Озеров", "date": "2026-12-27", "start": "09:00", "end": "21:00", "createdAt": 1123}, "imp_2026-12-01_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-01", "start": "09:00", "end": "21:00", "createdAt": 1124}, "imp_2026-12-02_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-02", "start": "09:00", "end": "19:00", "createdAt": 1125}, "imp_2026-12-04_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-04", "start": "09:00", "end": "21:00", "createdAt": 1126}, "imp_2026-12-05_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-05", "start": "09:00", "end": "21:00", "createdAt": 1127}, "imp_2026-12-08_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-08", "start": "21:00", "end": "09:00", "createdAt": 1128}, "imp_2026-12-09_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-09", "start": "21:00", "end": "09:00", "createdAt": 1129}, "imp_2026-12-12_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-12", "start": "21:00", "end": "09:00", "createdAt": 1130}, "imp_2026-12-13_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-13", "start": "21:00", "end": "09:00", "createdAt": 1131}, "imp_2026-12-16_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-16", "start": "09:00", "end": "21:00", "createdAt": 1132}, "imp_2026-12-17_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-17", "start": "09:00", "end": "21:00", "createdAt": 1133}, "imp_2026-12-20_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-20", "start": "09:00", "end": "21:00", "createdAt": 1134}, "imp_2026-12-21_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-21", "start": "09:00", "end": "21:00", "createdAt": 1135}, "imp_2026-12-24_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-24", "start": "21:00", "end": "09:00", "createdAt": 1136}, "imp_2026-12-25_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-25", "start": "21:00", "end": "09:00", "createdAt": 1137}, "imp_2026-12-28_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-28", "start": "09:00", "end": "21:00", "createdAt": 1138}, "imp_2026-12-29_S4": {"userId": "imp:S4", "name": "Вероника", "date": "2026-12-29", "start": "09:00", "end": "21:00", "createdAt": 1139}, "imp_2026-12-01_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-01", "start": "21:00", "end": "09:00", "createdAt": 1140}, "imp_2026-12-04_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-04", "start": "21:00", "end": "09:00", "createdAt": 1141}, "imp_2026-12-05_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-05", "start": "21:00", "end": "09:00", "createdAt": 1142}, "imp_2026-12-07_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-07", "start": "09:00", "end": "19:00", "createdAt": 1143}, "imp_2026-12-08_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-08", "start": "09:00", "end": "21:00", "createdAt": 1144}, "imp_2026-12-09_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-09", "start": "09:00", "end": "21:00", "createdAt": 1145}, "imp_2026-12-12_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-12", "start": "09:00", "end": "21:00", "createdAt": 1146}, "imp_2026-12-13_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-13", "start": "09:00", "end": "21:00", "createdAt": 1147}, "imp_2026-12-16_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-16", "start": "21:00", "end": "09:00", "createdAt": 1148}, "imp_2026-12-17_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-17", "start": "21:00", "end": "09:00", "createdAt": 1149}, "imp_2026-12-20_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-20", "start": "21:00", "end": "09:00", "createdAt": 1150}, "imp_2026-12-21_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-21", "start": "21:00", "end": "09:00", "createdAt": 1151}, "imp_2026-12-24_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-24", "start": "09:00", "end": "21:00", "createdAt": 1152}, "imp_2026-12-25_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-25", "start": "09:00", "end": "21:00", "createdAt": 1153}, "imp_2026-12-28_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-28", "start": "21:00", "end": "09:00", "createdAt": 1154}, "imp_2026-12-29_S5": {"userId": "imp:S5", "name": "Даша", "date": "2026-12-29", "start": "21:00", "end": "09:00", "createdAt": 1155}};
+
+  var fs=null, auth=null, ok=false;
+  try{ firebase.initializeApp(CONFIG); fs=firebase.firestore(); auth=firebase.auth(); ok=true; }
+  catch(e){ console.error("Firebase init failed",e); window.__FB=null; return; }
+
+  var curUid=null, authReady=false, usersSubbed=false, renderHook=null;
+  var usersCache={}; var authCbs=[];
+
+  function writeProfile(u){
+    try{ fs.collection("users").doc(u.uid).set({name:(u.displayName||u.email||"Сотрудник"),avatar:(u.photoURL||"")},{merge:true}); }catch(e){}
+  }
+  function subUsers(){
+    fs.collection("users").onSnapshot(function(snap){
+      snap.forEach(function(d){ var x=d.data()||{}; usersCache[d.id]={name:x.name||"",avatar:x.avatar||""}; });
+      if(renderHook) try{ renderHook(); }catch(e){}
+    }, function(e){ console.warn("users",e); });
+  }
+
+  auth.onAuthStateChanged(function(u){
+    curUid=u?u.uid:null; authReady=true;
+    if(u){ writeProfile(u); if(!usersSubbed){ usersSubbed=true; subUsers(); } }
+    authCbs.forEach(function(cb){ try{ cb(curUid); }catch(e){} });
+  });
+
+  function col(name){ return {
+    onSnapshot:function(next,err){ return fs.collection(name).onSnapshot(function(snap){
+        next({docs:snap.docs.map(function(d){ return {id:d.id,exists:d.exists,data:function(){return d.data();}}; })});
+      }, function(e){ if(err) err({code:e.code||"unavailable",message:e.message||""}); }); },
+    doc:function(id){ var r=fs.collection(name).doc(id); return {
+      set:function(data){ return r.set(data); },
+      update:function(data){ return r.update(data); },
+      "delete":function(){ return r["delete"](); }
+    }; },
+    add:function(data){ return fs.collection(name).add(data).then(function(ref){ return {id:ref.id}; }); }
+  }; }
+
+  function signIn(){
+    var p=new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(p).catch(function(e){
+      var c=e&&e.code||"";
+      if(c==="auth/popup-blocked"||c==="auth/cancelled-popup-request"||c==="auth/popup-closed-by-user"||c==="auth/operation-not-supported-in-this-environment"){
+        try{ auth.signInWithRedirect(p); }catch(e2){ console.warn(e2); }
+      } else { console.warn("signIn",e); }
+    });
+  }
+  function signOut(){ try{ auth.signOut(); }catch(e){} }
+
+  var seeding=false;
+  function seedSchedule(){
+    if(!curUid||seeding) return; seeding=true;
+    var keys=Object.keys(SEED), b=fs.batch();
+    keys.forEach(function(k){ b.set(fs.collection("schedule").doc(k), SEED[k]); });
+    b.commit().then(function(){ seeding=false; }).catch(function(e){ seeding=false; console.warn("seed",e); });
+  }
+
+  window.__FB={
+    db:{ collection:col },
+    user:{
+      id:function(){ return Promise.resolve(curUid); },
+      can:function(){ return Promise.resolve(!!curUid); },
+      profiles:function(ids){ var m={}; (ids||[]).forEach(function(id){ var u=usersCache[id]||{};
+        m[id]={id:id,name:u.name||"",avatarUrl:u.avatar||"",isMe:id===curUid,guest:false}; }); return Promise.resolve(m); }
+    },
+    onAuth:function(cb){ authCbs.push(cb); if(authReady) try{ cb(curUid); }catch(e){} },
+    setRenderHook:function(fn){ renderHook=fn; },
+    signIn:signIn, signOut:signOut, seedSchedule:seedSchedule
+  };
+})();
+</script>
+</head>
+<body>
+<div class="bar">
+  <div class="bar-in">
+    <div class="bar-top">
+      <div class="mark"><span></span></div>
+      <div>
+        <h1>Пульт смены</h1>
+        <div class="sub">Статусы, часы и обмен сменами</div>
+      </div>
+      <div class="live"><span class="dot" id="livedot"></span><span id="livetxt">подключение…</span></div>
+      <button class="iconbtn" id="themeBtn" type="button" aria-label="Переключить тему"></button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-shift" aria-selected="true" aria-controls="pane-shift">Смена</button>
+      <button class="tab" role="tab" id="tab-cal" aria-selected="false" aria-controls="pane-cal">Календарь</button>
+      <button class="tab" role="tab" id="tab-swap" aria-selected="false" aria-controls="pane-swap">Обмены&nbsp;сменами</button>
+    </div>
+  </div>
+</div>
+
+<main>
+  <div class="pane" id="pane-shift" role="tabpanel" aria-labelledby="tab-shift">
+    <section class="card me" id="meCard" aria-live="polite"></section>
+    <section class="card" aria-labelledby="hHist">
+      <div class="sec-h"><h2 id="hHist">Ваши часы</h2><span class="count" id="histCount"></span></div>
+      <div class="sec-body" id="histBody"></div>
+    </section>
+    <section class="card" aria-labelledby="hTeam">
+      <div class="sec-h"><h2 id="hTeam">Команда сейчас</h2><span class="count" id="teamCount"></span></div>
+      <div class="sec-body" id="teamBody"></div>
+    </section>
+  </div>
+
+  <div class="pane" id="pane-cal" role="tabpanel" aria-labelledby="tab-cal" hidden>
+    <section class="card" aria-labelledby="hCal">
+      <div class="sec-h"><h2 id="hCal">Смены команды</h2><span class="count" id="calCount"></span></div>
+      <div class="sec-body" id="calBody"></div>
+    </section>
+  </div>
+
+  <div class="pane" id="pane-swap" role="tabpanel" aria-labelledby="tab-swap" hidden>
+    <section class="card" aria-labelledby="hIn">
+      <div class="sec-h"><h2 id="hIn">Входящие</h2><span class="count" id="inCount"></span></div>
+      <div class="sec-body" id="inBody"></div>
+    </section>
+    <section class="card" aria-labelledby="hOut">
+      <div class="sec-h"><h2 id="hOut">Исходящие и недавние</h2></div>
+      <div class="sec-body" id="outBody"></div>
+    </section>
+  </div>
+</main>
+
+<div class="scrim" id="scrim" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Предложить обмен"></div></div>
+<div id="toast" role="status"></div>
+
+<script>
+(function(){
+  "use strict";
+  var db=null, user=null, myId=null;
+  var roster={}, sessions={}, schedule={}, swaps={};
+  var writing=false, activeTab="shift";
+  var ready={roster:false,sessions:false,schedule:false,swaps:false};
+  var addFor=null;      // дата, для которой открыта форма добавления смены
+  var sheet=null;       // state модалки обмена
+  var dayModal=null;    // дата открытой карточки дня (модалка)
+  var calFilter="";     // "" = вся команда, иначе userId
+  var calView={y:new Date().getFullYear(), m:new Date().getMonth()}; // просматриваемый месяц календаря
+  var calAutoJumped=false; // один раз перескочить на ближайший месяц со сменами
+
+  // ---------- helpers ----------
+  function elx(tag,attrs,kids){
+    var n=document.createElement(tag); attrs=attrs||{};
+    for(var k in attrs){ var v=attrs[k]; if(v==null) continue;
+      if(k==="class") n.className=v;
+      else if(k==="text") n.textContent=v;
+      else if(k==="html") n.innerHTML=v;
+      else if(k==="hidden"){ if(v) n.hidden=true; }
+      else if(k.slice(0,2)==="on"&&typeof v==="function") n.addEventListener(k.slice(2),v);
+      else n.setAttribute(k,v);
+    }
+    kids=kids||[]; for(var i=0;i<kids.length;i++){var c=kids[i]; if(c==null) continue; n.append(c.nodeType?c:document.createTextNode(c));}
+    return n;
+  }
+  function clear(n){ while(n.firstChild) n.removeChild(n.firstChild); }
+  function txt(s){ return document.createTextNode(s==null?"":String(s)); }
+  function toast(m){ var t=document.getElementById("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove("show");},2800); }
+  function pad(n){ return (n<10?"0":"")+n; }
+  function todayKey(){ var d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+  function dateKey(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+  function parseKey(k){ var p=k.split("-"); return new Date(+p[0],+p[1]-1,+p[2]); }
+
+  function ago(ts){ if(!ts) return ""; var s=(Date.now()-ts)/1000;
+    if(s<45) return "только что"; var m=Math.round(s/60); if(m<60) return m+" мин назад";
+    var h=Math.floor(m/60); if(h<10) return h+" ч назад";
+    var d=new Date(ts); return d.toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"})+", "+d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}); }
+  function fmtDur(secs){ secs=Math.max(0,Math.round(secs)); var h=Math.floor(secs/3600), m=Math.floor((secs%3600)/60);
+    if(h&&m) return h+" ч "+m+" мин"; if(h) return h+" ч"; return m+" мин"; }
+  function stateOf(d){ if(!d||d.status!=="on") return "off"; return d.lunch?"lunch":"on"; }
+  var LABEL={on:"На смене",lunch:"На обеде",off:"Не на смене"};
+  function initials(name){ if(!name) return ""; var p=name.trim().split(/\s+/); return ((p[0]||"")[0]||"").toUpperCase()+((p[1]||"")[0]||"").toUpperCase(); }
+
+  function kindOf(start){ if(!start) return "day"; var h=+String(start).split(":")[0]; return (h>=19||h<7)?"night":"day"; }
+  function kindClass(k){ return k==="night"?"k-night":"k-day"; }
+  function kindName(k){ return k==="night"?"Ночная":"Дневная"; }
+  function isOfficeDay(dateStr,k){ if(k!=="day"||!dateStr) return false; var wd=parseKey(dateStr).getDay(); return wd===2||wd===4; } // Вт/Чт, только дневная
+
+  var ICON={
+    swap:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4 3 8l4 4"/><path d="M3 8h13a4 4 0 0 1 4 4"/><path d="m17 20 4-4-4-4"/><path d="M21 16H8a4 4 0 0 1-4-4"/></svg>',
+    sun:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+    moon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>',
+    info:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>',
+    cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+    bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
+    users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
+    chev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+    chevL:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
+    office:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/></svg>',
+    arr:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>'
+  };
+  function ico(name,cls){ var s=document.createElement("span"); s.innerHTML=ICON[name]; var e=s.firstChild; e.setAttribute("class",(cls||"ic")); return e; }
+  function avatar(p,name,cls){ var a=elx("div",{class:"ava "+(cls||"")});
+    if(p&&p.avatarUrl){ a.append(elx("img",{src:p.avatarUrl,alt:"",referrerpolicy:"no-referrer"})); } else { a.textContent=initials(name)||"?"; } return a; }
+  function btn(label,variant,handler,icon){ var cls="btn"+(variant?" "+variant:""); var b=elx("button",{class:cls,type:"button"});
+    if(handler) b.addEventListener("click",handler); if(icon) b.append(ico(icon)); b.append(txt(label)); if(writing) b.disabled=true; return b; }
+
+  // ---------- тема ----------
+  function curTheme(){ try{ return localStorage.getItem("ps-theme")||"system"; }catch(e){ return "system"; } }
+  function applyTheme(t){ try{ var r=document.documentElement; if(t==="light"||t==="dark") r.setAttribute("data-theme",t); else r.removeAttribute("data-theme"); }catch(e){} }
+  function effectiveDark(){ var t=curTheme(); if(t==="dark")return true; if(t==="light")return false;
+    try{ return window.matchMedia&&window.matchMedia("(prefers-color-scheme:dark)").matches; }catch(e){ return false; } }
+  function updateThemeBtn(){ var b=document.getElementById("themeBtn"); if(!b)return; clear(b); b.append(ico(effectiveDark()?"sun":"moon","ic")); b.title=effectiveDark()?"Светлая тема":"Тёмная тема"; }
+  function toggleTheme(){ var nx=effectiveDark()?"light":"dark"; try{ localStorage.setItem("ps-theme",nx); }catch(e){} applyTheme(nx); updateThemeBtn(); }
+
+  // ---------- derived data ----------
+  function teamIds(){ var s={}; Object.keys(roster).forEach(function(i){s[i]=1;}); Object.keys(sessions).forEach(function(i){s[i]=1;});
+    Object.keys(schedule).forEach(function(k){ if(schedule[k].userId) s[schedule[k].userId]=1; }); if(myId) s[myId]=1; return Object.keys(s); }
+  function myShifts(){ return Object.keys(schedule).map(function(k){return schedule[k];}).filter(function(s){return s.userId===myId;})
+      .sort(function(a,b){ return (a.date+a.start).localeCompare(b.date+b.start); }); }
+  function shiftsOf(uid){ return Object.keys(schedule).map(function(k){return schedule[k];}).filter(function(s){return s.userId===uid;})
+      .sort(function(a,b){ return (a.date+a.start).localeCompare(b.date+b.start); }); }
+  function importedSlots(){ var m={}; Object.keys(schedule).forEach(function(k){ var s=schedule[k];
+      if(s.userId&&s.userId.slice(0,4)==="imp:"&&!m[s.userId]) m[s.userId]={uid:s.userId,name:s.name||s.userId}; });
+      return Object.keys(m).map(function(k){return m[k];}).sort(function(a,b){return a.name.localeCompare(b.name);}); }
+  function shiftLabel(id){ var s=schedule[id]; if(!s) return null; return s; }
+  function liveToday(d){ if(!d) return 0; if(d.dayKey!==todayKey()) return 0; var base=d.todaySecs||0;
+    if(d.status==="on"&&!d.lunch&&d.workStart) base+=(Date.now()-d.workStart)/1000; return base; }
+  function incomingCount(){ var c=0; Object.keys(swaps).forEach(function(k){var s=swaps[k]; if(s.status==="pending"&&s.toId===myId)c++;}); return c; }
+
+  function toMin(t){ if(!t)return 0; var p=String(t).split(":"); return (+p[0])*60+(+p[1]||0); }
+  function shiftHours(s){ if(!s||!s.start||!s.end)return 0; var span=((toMin(s.end)-toMin(s.start))+1440)%1440; if(span===0)span=1440; var h=span/60-1; return Math.max(0,h); } // минус час обед
+  function mondayOf(d){ var x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); var wd=(x.getDay()+6)%7; x.setDate(x.getDate()-wd); return x; }
+  function shiftOnFor(uid,key){ for(var k in schedule){ var s=schedule[k]; if(s.userId===uid&&s.date===key) return s; } return null; }
+  function userName(P,uid){ if(P[uid]&&P[uid].name) return P[uid].name; var sd=null; for(var k in schedule){ if(schedule[k].userId===uid){ sd=schedule[k]; break; } } if(sd&&sd.name) return sd.name; return uid===myId?"Вы":"Коллега"; }
+  function knownUsers(P){ var ids=teamIds(), seen={}, arr=[]; ids.forEach(function(id){ if(seen[id])return; seen[id]=1; arr.push({uid:id,name:userName(P,id)}); });
+    arr.sort(function(a,b){ if(a.uid===myId)return -1; if(b.uid===myId)return 1; return a.name.localeCompare(b.name); }); return arr; }
+  function monthMap(y,m,filterUid){ var map={}; Object.keys(schedule).forEach(function(k){ var s=schedule[k]; if(!s.date)return; var d=parseKey(s.date);
+    if(d.getFullYear()!==y||d.getMonth()!==m)return; if(filterUid&&s.userId!==filterUid)return; (map[s.date]=map[s.date]||[]).push(k); }); return map; }
+
+  // ---------- profiles ----------
+  var seq=0;
+  function render(){ var my=++seq; var ids=teamIds(); Object.keys(swaps).forEach(function(k){var s=swaps[k]; if(s.fromId)ids.push(s.fromId); if(s.toId)ids.push(s.toId);});
+    var uniq={}; ids=ids.filter(function(i){ if(!i||uniq[i])return false; uniq[i]=1; return true;});
+    if(user&&ids.length){ user.profiles(ids).then(function(p){ if(my===seq) paint(p||{}); }); } else { paint({}); } }
+  function nameFor(p,id){ var x=p[id]; if(x&&x.name) return x.name; return id===myId?"Вы":"Коллега"; }
+  function ownerName(s,P){ if(!s) return "Коллега"; if(s.userId===myId) return nameFor(P,myId); if(s.name) return s.name; return nameFor(P,s.userId); }
+
+  // ---------- paint ----------
+  function paint(P){
+    // header live
+    var dot=document.getElementById("livedot"), lt=document.getElementById("livetxt");
+    if(!db){ dot.className="dot"; lt.textContent="нет связи"; } else { dot.className="dot ok anim"; lt.textContent="вживую"; }
+    // tab badge
+    var inc=db?incomingCount():0; var tabSwap=document.getElementById("tab-swap");
+    tabSwap.textContent="Обмены сменами"; if(inc){ tabSwap.append(elx("span",{class:"badge",text:String(inc)})); }
+
+    if(activeTab==="shift"){ paintMe(P); paintHist(P); paintTeam(P); }
+    else if(activeTab==="cal"){ paintCal(P); }
+    else { paintSwaps(P); }
+    if(dayModal) paintDaySheet(P); else if(sheet) paintSheet(P);
+  }
+
+  function paintMe(P){
+    var box=document.getElementById("meCard"); clear(box);
+    var meP=myId?P[myId]:null, myName=myId?(meP&&meP.name?meP.name:"Вы"):null, d=myId?roster[myId]:null, st=stateOf(d);
+    box.append(elx("div",{class:"me-top"},[
+      avatar(meP,myName),
+      elx("div",{class:"me-id"},[ elx("div",{class:"lbl",text:"Ваш статус"}), elx("div",{class:"nm",text: myId?myName:"Гость"}) ]),
+      elx("div",{class:"me-state"},[ elx("span",{class:"pill "+st,text:LABEL[st]}),
+        elx("div",{class:"me-timer"},[ txt("Сегодня на смене: "), elx("b",{text:fmtDur(liveToday(d))}) ]) ])
+    ]));
+    if(!db){ box.append(elx("div",{class:"note-info",style:"margin-top:16px"},[ico("info"),txt("Нет связи с базой. Обновите страницу.")])); return; }
+    if(!myId){
+      box.append(elx("div",{class:"note-info",style:"margin-top:16px"},[ico("info"),txt("Войдите через рабочий Google-аккаунт, чтобы отмечать смену, вести часы и меняться сменами.")]));
+      box.append(elx("div",{class:"actions"},[ btn("Войти через Google","primary",function(){ window.__FB.signIn(); },"users") ]));
+      return;
+    }
+    var acts=elx("div",{class:"actions"});
+    if(st==="off"){ acts.append(btn("Выйти на смену","primary",function(){setStatus("on",false);})); }
+    else if(st==="on"){ acts.append(btn("Уйти на обед","lunch",function(){setStatus("on",true);},"sun")); acts.append(btn("Завершить смену","ghost",function(){setStatus("off",false);})); }
+    else { acts.append(btn("Вернуться с обеда","on",function(){setStatus("on",false);})); acts.append(btn("Завершить смену","ghost",function(){setStatus("off",false);})); }
+    box.append(acts);
+
+    // привязка импортированных смен к своему аккаунту
+    var imp=importedSlots();
+    if(imp.length){
+      var sel=elx("select",{class:"se",id:"claim-sel"});
+      imp.forEach(function(it){ sel.append(elx("option",{value:it.uid,text:it.name})); });
+      if(meP&&meP.name){ imp.forEach(function(it){ if(it.name===meP.name) sel.value=it.uid; }); }
+      box.append(elx("div",{class:"claim"},[
+        elx("div",{class:"claim-t"},[ ico("swap","ic"), txt("Привязать смены из графика к своему аккаунту") ]),
+        elx("div",{class:"fr"},[ sel, btn("Это мои смены","primary sm",function(){ claimSlot(document.getElementById("claim-sel").value); }) ])
+      ]));
+    }
+
+    box.append(elx("div",{style:"margin-top:14px"},[ btn("Выйти","ghost sm",function(){ window.__FB.signOut(); }) ]));
+  }
+
+  function paintHist(P){
+    var body=document.getElementById("histBody"), cnt=document.getElementById("histCount"); clear(body); cnt.textContent="";
+    if(!db){ body.append(skeleton(3)); return; }
+    if(!myId){ body.append(elx("div",{class:"empty"},[txt("Часы считаются после входа в аккаунт.")])); return; }
+
+    var tk=todayKey(), sess=(sessions[myId]&&sessions[myId].days)||{};
+    var mon=mondayOf(new Date());
+    var DOW=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+    var wk=elx("div",{class:"wk"}); var weekSecs=0;
+    for(var i=0;i<7;i++){ (function(i){
+      var dd=new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+i); var key=dateKey(dd);
+      var isToday=key===tk, isFuture=key>tk;
+      var sh=shiftOnFor(myId,key); var k=sh?kindOf(sh.start):null;
+      var secs=0;
+      if(isToday) secs=liveToday(roster[myId]);
+      else if(sess[key]!=null) secs=sess[key];
+      else if(sh && !isFuture) secs=shiftHours(sh)*3600;
+      else if(sh && isFuture) secs=shiftHours(sh)*3600; // план на будущее
+      if(!isFuture) weekSecs+=secs;
+      var cell=elx("div",{class:"wkd"+(isToday?" today":"")+(isFuture?" future":"")+(k?(" "+k):"")});
+      cell.append(elx("div",{class:"wd",text:DOW[i]}));
+      cell.append(elx("div",{class:"wn",text:String(dd.getDate())}));
+      if(sh){ cell.append(ico(k==="night"?"moon":"sun","wk-ic")); cell.append(elx("div",{class:"wh",text: secs>30? Math.round(secs/3600)+"ч":"—"})); }
+      else { cell.append(elx("div",{class:"wdash",text:"·"})); }
+      wk.append(cell);
+    })(i); }
+    cnt.textContent="тек. неделя";
+    body.append(wk);
+    body.append(elx("div",{class:"wk-sum"},[ txt("Отработано за неделю: "), elx("b",{text:fmtDur(weekSecs)}) ]));
+  }
+
+  function paintTeam(P){
+    var body=document.getElementById("teamBody"), cnt=document.getElementById("teamCount"); clear(body);
+    var ids=Object.keys(roster); cnt.textContent = ids.length? (count(ids,"on")+" на смене"):"";
+    if(!ready.roster){ body.append(skeleton(3)); return; }
+    if(!ids.length){ body.append(empty("users","Пока никто не отметился.\nНажмите «Выйти на смену» — и появитесь здесь.")); return; }
+    var order={on:0,lunch:1,off:2};
+    ids.sort(function(a,b){ var da=order[stateOf(roster[a])],dbb=order[stateOf(roster[b])]; if(da!==dbb)return da-dbb; return (roster[b].updatedAt||0)-(roster[a].updatedAt||0); });
+    var ul=elx("ul",{class:"list"});
+    ids.forEach(function(id){ var d=roster[id],st=stateOf(d),nm=nameFor(P,id);
+      var who=elx("div",{class:"who"}); var nmEl=elx("div",{class:"nm"}); nmEl.append(txt(nm)); if(id===myId) nmEl.append(elx("span",{class:"you",text:"вы"}));
+      who.append(nmEl); who.append(elx("div",{class:"t",text: d.updatedAt?ago(d.updatedAt):""}));
+      ul.append(elx("li",{class:"row"},[ avatar(P[id],nm), who,
+        elx("div",{class:"rt",text: liveToday(d)>30? fmtDur(liveToday(d)):""}),
+        elx("span",{class:"pill "+st,text:LABEL[st]}) ]));
+    });
+    body.append(ul);
+  }
+  function count(ids,st){ var c=0; ids.forEach(function(i){ if(stateOf(roster[i])===st)c++; }); return c; }
+
+  // ---------- Календарь ----------
+  function cap(s){ return s? s.charAt(0).toUpperCase()+s.slice(1):s; }
+  function monthName(y,m){ return new Date(y,m,1).toLocaleDateString("ru-RU",{month:"long",year:"numeric"}); }
+  function shiftMonth(delta){ var d=new Date(calView.y,calView.m+delta,1); var now=new Date();
+    if(d.getFullYear()<now.getFullYear() || (d.getFullYear()===now.getFullYear()&&d.getMonth()<now.getMonth())) return;
+    calAutoJumped=true; calView={y:d.getFullYear(),m:d.getMonth()}; addFor=null; render(); }
+  function maybeAutoJump(){ if(calAutoJumped) return; calAutoJumped=true;
+    var tag=calView.y+"-"+pad(calView.m+1);
+    var hasCur=Object.keys(schedule).some(function(k){ var d=schedule[k].date; return d&&d.slice(0,7)===tag; });
+    if(hasCur) return;
+    var dates=Object.keys(schedule).map(function(k){return schedule[k].date;}).filter(Boolean).sort();
+    if(!dates.length) return;
+    var fut=dates.filter(function(d){ return d>=todayKey(); });
+    var pick=fut[0]||dates[dates.length-1]; var p=pick.split("-");
+    calView={y:+p[0],m:+p[1]-1}; }
+
+  var DOWK=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+  function paintCal(P){
+    var body=document.getElementById("calBody"), cnt=document.getElementById("calCount"); clear(body);
+    if(!db){ body.append(elx("div",{class:"note-info"},[ico("info"),txt("Нет связи с хранилищем.")])); return; }
+    if(!myId){ body.append(elx("div",{class:"empty"},[txt("Войдите, чтобы видеть график смен.")])); return; }
+    if(!ready.schedule){ body.append(skeleton(4)); return; }
+
+    // первичная загрузка графика (когда база пустая)
+    if(Object.keys(schedule).length===0){
+      body.append(elx("div",{class:"note-info"},[ico("info"),txt("График ещё не загружен. Нажмите, чтобы один раз залить смены на ноябрь–декабрь из файла.")]));
+      body.append(btn(writing?"Загрузка…":"Загрузить график ноября–декабря","primary block",function(){ window.__FB.seedSchedule(); },"plus"));
+      return;
+    }
+
+    var y=calView.y, m=calView.m, now=new Date(), curY=now.getFullYear(), curM=now.getMonth();
+    var atFloor=(y===curY && m===curM);
+
+    // фильтр по человеку
+    var people=knownUsers(P);
+    var sel=elx("select",{id:"calflt",onchange:function(){ calFilter=this.value; render(); }});
+    sel.append(elx("option",{value:"",text:"Вся команда"}));
+    people.forEach(function(u){ var o=elx("option",{value:u.uid,text: u.uid===myId? "Мои смены":u.name}); if(calFilter===u.uid)o.selected=true; sel.append(o); });
+    body.append(elx("div",{class:"calfilter"},[ elx("label",{text:"Показать"}), sel ]));
+
+    // переключатель месяцев
+    body.append(elx("div",{class:"mnav"},[
+      elx("button",{class:"navbtn",type:"button","aria-label":"Предыдущий месяц",disabled:atFloor?"":null,onclick:function(){ shiftMonth(-1); }},[ico("chevL","ic")]),
+      elx("div",{class:"mlabel",text: cap(monthName(y,m))}),
+      elx("button",{class:"navbtn",type:"button","aria-label":"Следующий месяц",onclick:function(){ shiftMonth(1); }},[ico("chev","ic")])
+    ]));
+
+    if(myId){ var defDate=atFloor? todayKey() : dateKey(new Date(y,m,1));
+      body.append(btn("Добавить смену","primary sm block",function(){ openAdd(defDate); },"plus")); }
+    body.append(buildAddForm(P));
+
+    // легенда
+    body.append(elx("div",{class:"legend"},[
+      elx("span",{},[ elx("i",{class:"lg-day"}), txt("дневная") ]),
+      elx("span",{},[ elx("i",{class:"lg-night"}), txt("ночная") ]),
+      elx("span",{},[ elx("i",{class:"lg-off"}), txt("Вт/Чт — офис обязателен") ])
+    ]));
+
+    // шапка дней недели
+    var dow=elx("div",{class:"cal-dow"}); DOWK.forEach(function(w){ dow.append(elx("span",{text:w})); }); body.append(dow);
+
+    var map=monthMap(y,m,calFilter||null);
+    var daysInMonth=new Date(y,m+1,0).getDate();
+    var firstIx=(new Date(y,m,1).getDay()+6)%7; // Пн=0
+    var grid=elx("div",{class:"cal-grid"});
+    for(var b=0;b<firstIx;b++) grid.append(elx("div",{class:"cal-cell blank"}));
+    var monthShifts=0, tk=todayKey();
+    for(var day=1; day<=daysInMonth; day++){ (function(day){
+      var key=dateKey(new Date(y,m,day));
+      var list=(map[key]||[]).sort(function(a,b){ return (schedule[a].start||"").localeCompare(schedule[b].start||""); });
+      monthShifts+=list.length;
+      var isToday=key===tk;
+      var wd=new Date(y,m,day).getDay(); var officeDay=(wd===2||wd===4);
+      var cell=elx("div",{class:"cal-cell"+(isToday?" today":"")+(officeDay?" office":"")+(list.length?" has":""),
+        onclick:function(){ openDay(key); }});
+      cell.append(elx("div",{class:"dn"},[ txt(String(day)) ]));
+      var dots=elx("div",{class:"dots"}); var shown=0;
+      list.forEach(function(sid){ if(shown>=6)return; var s=schedule[sid]; var kk=kindOf(s.start);
+        dots.append(elx("div",{class:"cdot "+kk+(s.userId===myId?" mine":"")})); shown++; });
+      if(list.length>6) dots.append(elx("div",{class:"more",text:"+"+(list.length-6)}));
+      cell.append(dots);
+      grid.append(cell);
+    })(day); }
+    body.append(grid);
+    cnt.textContent = monthShifts? monthShifts+" смен":"";
+    if(!monthShifts){ body.append(empty("cal","В этом месяце по фильтру смен нет.")); }
+  }
+
+  // карточка дня (модалка) — показывает весь состав дня
+  function paintDaySheet(P){
+    var host=document.getElementById("sheet"); clear(host);
+    var dt=parseKey(dayModal);
+    host.append(elx("h3",{text: cap(dt.toLocaleDateString("ru-RU",{weekday:"long",day:"2-digit",month:"long"})) }));
+
+    // ВСЕ смены этого дня (без учёта фильтра) — чтобы видеть, с кем работаешь
+    var all=Object.keys(schedule).filter(function(k){ return schedule[k].date===dayModal; })
+      .sort(function(a,b){ return (schedule[a].start||"").localeCompare(schedule[b].start||""); });
+
+    if(!all.length){ host.append(elx("div",{class:"empty"},[txt("Смен на этот день нет.")])); }
+    else {
+      var focusUid = calFilter || myId;                       // чей день в центре внимания
+      var mineList = all.filter(function(sid){ return schedule[sid].userId===focusUid; });
+      var others   = all.filter(function(sid){ return schedule[sid].userId!==focusUid; });
+      var myKinds  = {}; mineList.forEach(function(sid){ myKinds[kindOf(schedule[sid].start)]=1; });
+
+      if(mineList.length){
+        host.append(elx("div",{class:"daygrp",text: focusUid===myId? "Ваша смена" : (userName(P,focusUid)+" — смена") }));
+        var b1=elx("div",{style:"display:flex;flex-direction:column;gap:8px"});
+        mineList.forEach(function(sid){ b1.append(shiftChip(sid,P)); }); host.append(b1);
+      }
+      if(others.length){
+        host.append(elx("div",{class:"daygrp",text: mineList.length? "Вместе в этот день" : "Смены в этот день" }));
+        var b2=elx("div",{style:"display:flex;flex-direction:column;gap:8px"});
+        others.forEach(function(sid){ var ok=myKinds[kindOf(schedule[sid].start)];
+          b2.append(shiftChip(sid,P, ok? "в вашу смену":null)); });
+        host.append(b2);
+      } else if(mineList.length){
+        host.append(elx("div",{class:"note-info"},[ico("users"),txt("В этот день вы на смене одни.")]));
+      }
+      if(myId) host.append(elx("div",{class:"note-info"},[ico("info"),txt("Тап по смене — предложить обмен.")]));
+    }
+
+    var now=new Date(); var isPast=dt<new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    if(myId && !isPast) host.append(btn("Добавить смену на этот день","primary block",function(){ var d=dayModal; closeModal(); openAdd(d); setTab("cal"); },"plus"));
+    host.append(btn("Закрыть","ghost block",function(){ closeModal(); }));
+  }
+
+  function shiftChip(sid,P,tag){
+    var s=schedule[sid]; var mine=s.userId===myId; var nm=ownerName(s,P); var k=kindOf(s.start);
+    var who=elx("div",{class:"s-who"}); var nmEl=elx("div",{class:"nm"}); nmEl.append(txt(nm));
+    if(mine) nmEl.append(elx("span",{class:"you",text:"вы"}));
+    else if(tag) nmEl.append(elx("span",{class:"you together",text:tag}));
+    who.append(nmEl);
+    var office=isOfficeDay(s.date,k);
+    if(office) who.append(elx("div",{class:"s-sub"},[ ico("office","ic"), txt("офис — обязательно") ]));
+    var b=elx("button",{class:"shift "+kindClass(k)+(mine?" mine":"")+(office?" office":""),type:"button",onclick:function(){ openSheet(sid); }},[
+      elx("span",{class:"bar-k"}), who,
+      elx("span",{class:"s-time"},[ ico(k==="night"?"moon":"sun","ic s-ki"), txt(kindName(k)+" · "+(s.start||"")+"–"+(s.end||"")) ]),
+      ico("chev","ic chev")
+    ]);
+    return b;
+  }
+
+  function buildAddForm(P){
+    var f=elx("form",{class:"panel",id:"addForm",hidden: addFor==null});
+    if(addFor==null) return f;
+    f.addEventListener("submit",function(e){ e.preventDefault();
+      var date=f.querySelector("#af-date").value; var st=f.querySelector("#af-start").value; var en=f.querySelector("#af-end").value;
+      if(!date||!st||!en){ toast("Заполните дату и время"); return; }
+      addShift(date,st,en);
+    });
+    f.append(elx("div",{},[ elx("label",{class:"fl",for:"af-date",text:"Дата"}), elx("input",{class:"ti",type:"date",id:"af-date",value:addFor}) ]));
+    f.append(elx("div",{class:"fr"},[
+      elx("div",{},[ elx("label",{class:"fl",for:"af-start",text:"Начало"}), elx("input",{class:"ti",type:"time",id:"af-start",value:"09:00",step:"300"}) ]),
+      elx("div",{},[ elx("label",{class:"fl",for:"af-end",text:"Конец"}), elx("input",{class:"ti",type:"time",id:"af-end",value:"21:00",step:"300"}) ])
+    ]));
+    f.append(elx("label",{class:"fl",text:"Тип смены"}));
+    var pr=elx("div",{class:"presets"});
+    [["Дневная","09:00","21:00"],["Ночная","21:00","09:00"]].forEach(function(p){
+      pr.append(elx("button",{class:"chipbtn",type:"button",text:p[0],onclick:function(){ f.querySelector("#af-start").value=p[1]; f.querySelector("#af-end").value=p[2]; }}));
+    });
+    f.append(pr);
+    f.append(elx("div",{class:"fr"},[ btn("Добавить смену","primary sm",null), btn("Отмена","ghost sm",function(){ addFor=null; render(); }) ]));
+    var sub=f.querySelector(".fr .btn.primary"); if(sub) sub.type="submit";
+    return f;
+  }
+  function openAdd(dateKeyStr){ addFor=(addFor===dateKeyStr)?null:dateKeyStr; render();
+    if(addFor) setTimeout(function(){ var el=document.getElementById("addForm"); if(el) el.scrollIntoView({block:"center",behavior:"smooth"}); },40); }
+
+  // ---------- Обмены ----------
+  function paintSwaps(P){
+    var inB=document.getElementById("inBody"), inC=document.getElementById("inCount"), outB=document.getElementById("outBody"); clear(inB); clear(outB);
+    if(!db){ inB.append(elx("div",{class:"note-info"},[ico("info"),txt("Нет связи с хранилищем.")])); return; }
+    if(!myId){ inB.append(elx("div",{class:"empty"},[txt("Обмены доступны после входа в аккаунт.")])); return; }
+    if(!ready.swaps){ inB.append(skeleton(2)); outB.append(skeleton(2)); return; }
+
+    var keys=Object.keys(swaps);
+    var incoming=keys.filter(function(k){return swaps[k].status==="pending"&&swaps[k].toId===myId;}).sort(newest);
+    var outgoing=keys.filter(function(k){return swaps[k].status==="pending"&&swaps[k].fromId===myId;}).sort(newest);
+    var recent=keys.filter(function(k){var s=swaps[k]; return s.status!=="pending" && (s.fromId===myId||s.toId===myId) && (Date.now()-(s.resolvedAt||0)<3*86400000);}).sort(function(a,b){return (swaps[b].resolvedAt||0)-(swaps[a].resolvedAt||0);});
+
+    inC.textContent= incoming.length? incoming.length+" ждут ответа":"";
+    if(!incoming.length){ inB.append(empty("bell","Новых предложений об обмене нет.\nКогда коллега предложит обмен, оно появится здесь.")); }
+    else { var w=elx("div",{style:"display:flex;flex-direction:column;gap:12px"}); incoming.forEach(function(id){ w.append(swapCard(id,P,"in")); }); inB.append(w); }
+
+    if(!outgoing.length && !recent.length){ outB.append(elx("div",{class:"empty"},[txt("Пока ничего. Предложить обмен можно во вкладке «Календарь».")])); }
+    else { var w2=elx("div",{style:"display:flex;flex-direction:column;gap:12px"});
+      outgoing.forEach(function(id){ w2.append(swapCard(id,P,"out")); });
+      recent.forEach(function(id){ w2.append(swapCard(id,P,"done")); });
+      outB.append(w2); }
+  }
+  function newest(a,b){ return (swaps[b].createdAt||0)-(swaps[a].createdAt||0); }
+
+  function legEl(cap,sid,fallbackName){ var s=sid?schedule[sid]:null;
+    var leg=elx("div",{class:"leg"}); leg.append(elx("div",{class:"cap",text:cap}));
+    if(!sid){ leg.append(elx("div",{class:"val",text:"— без обмена"})); return leg; }
+    if(!s){ leg.append(elx("div",{class:"val",text:"смена удалена"})); return leg; }
+    var dt=parseKey(s.date);
+    leg.append(elx("div",{class:"val",text: dt.toLocaleDateString("ru-RU",{weekday:"short",day:"2-digit",month:"short"})}));
+    leg.append(elx("div",{class:"tm",text:(s.start||"")+"–"+(s.end||"")}));
+    return leg;
+  }
+
+  function swapCard(id,P,kind){
+    var s=swaps[id]; var otherId = (s.fromId===myId)? s.toId : s.fromId; var otherName=nameFor(P,otherId);
+    var card=elx("div",{class:"swap"+(kind==="in"?" incoming":"")});
+
+    var ttl=elx("div",{class:"swap-ttl"});
+    if(kind==="in"){ ttl.append(txt("Вам предлагает ")); ttl.append(elx("b",{text:otherName})); }
+    else if(kind==="out"){ ttl.append(txt("Вы предложили ")); ttl.append(elx("b",{text:otherName})); ttl.append(txt(" · ждём ответа")); }
+    else { ttl.append(elx("b",{text:otherName})); }
+    card.append(ttl);
+
+    // Что меняется — с точки зрения текущего зрителя
+    // offerShift принадлежит fromId, wantShift принадлежит toId
+    var iAmFrom = s.fromId===myId;
+    var myLegId  = iAmFrom? s.offerShiftId : s.wantShiftId;   // моя смена в сделке
+    var theirLegId = iAmFrom? s.wantShiftId : s.offerShiftId; // смена другого
+    var trade=elx("div",{class:"trade"},[
+      legEl("Ваша смена", myLegId), ico("arr","ic arr"), legEl("Смена "+otherName, theirLegId)
+    ]);
+    card.append(trade);
+
+    var foot=elx("div",{class:"swap-foot"});
+    if(kind==="in"){
+      foot.append(btn("Согласиться","primary sm",function(){ accept(id); }));
+      foot.append(btn("Отказаться","danger sm",function(){ resolve(id,"declined"); }));
+    } else if(kind==="out"){
+      foot.append(btn("Отменить","ghost sm",function(){ resolve(id,"cancelled"); }));
+    } else {
+      var v=elx("span",{class:"verdict "+(s.status==="accepted"?"ok":"no")});
+      v.append(txt(s.status==="accepted"?"✓ Обмен принят": s.status==="declined"?"✕ Отклонено":"Отменено"));
+      foot.append(v);
+      foot.append(elx("button",{class:"dismiss",type:"button",title:"Скрыть","aria-label":"Скрыть",text:"×",onclick:function(){ dismiss(id); }}));
+    }
+    card.append(foot);
+    return card;
+  }
+
+  // ---------- Модалки ----------
+  function openDay(key){ sheet=null; dayModal=key; document.getElementById("scrim").hidden=false; render(); }
+  function openSheet(pivotId){ var p=schedule[pivotId]; if(!p) return;
+    if(!myId){ toast("Войдите, чтобы предлагать обмен"); return; }
+    dayModal=null;
+    var pd=parseKey(p.date);
+    sheet={pivotId:pivotId, targetId: p.userId===myId? null : p.userId, otherShiftId:"", noSwap:false, pickMonth:{y:pd.getFullYear(),m:pd.getMonth()}};
+    document.getElementById("scrim").hidden=false; render();
+  }
+  function closeModal(){ sheet=null; dayModal=null; document.getElementById("scrim").hidden=true; render(); }
+  document.getElementById("scrim").addEventListener("click",function(e){ if(e.target.id==="scrim") closeModal(); });
+
+  function paintSheet(P){
+    var host=document.getElementById("sheet"); clear(host);
+    var pivot=schedule[sheet.pivotId]; if(!pivot){ closeModal(); return; }
+    var pivotMine=pivot.userId===myId;
+    host.append(elx("h3",{text: pivotMine?"Предложить обмен своей смены":"Обмен по смене коллеги"}));
+
+    var dt=parseKey(pivot.date); var pk=kindOf(pivot.start);
+    host.append(elx("div",{class:"pivot"},[
+      elx("div",{class:"nm"},[ txt(pivotMine?"Ваша смена":("Смена "+ownerName(pivot,P))) ]),
+      elx("div",{style:"color:var(--fg-muted);font-size:13px;margin-top:3px;font-family:var(--mono);display:flex;align-items:center;gap:6px"},[
+        ico(pk==="night"?"moon":"sun","ic",{}), txt(kindName(pk)+" · "+dt.toLocaleDateString("ru-RU",{day:"2-digit",month:"long"})+" · "+(pivot.start||"")+"–"+(pivot.end||"")) ]),
+      isOfficeDay(pivot.date,pk)? elx("div",{style:"color:var(--office);font-size:12px;font-weight:600;margin-top:4px;display:flex;align-items:center;gap:5px"},[ico("office","ic"),txt("офис — обязательно")]):null
+    ]));
+
+    // Выбор коллеги (только когда опорная смена — моя)
+    var targets = teamIds().filter(function(i){return i!==myId;});
+    if(pivotMine){
+      var selT=elx("select",{class:"se",id:"sh-target",onchange:function(){ sheet.targetId=this.value; sheet.otherShiftId=""; sheet.noSwap=false; render(); }});
+      selT.append(elx("option",{value:"",text:"— выберите коллегу —"}));
+      targets.forEach(function(tid){ var o=elx("option",{value:tid,text:userName(P,tid)}); if(sheet.targetId===tid) o.selected=true; selT.append(o); });
+      host.append(elx("div",{},[ elx("label",{class:"fl",text:"Кому предложить"}), selT ]));
+    } else {
+      host.append(elx("div",{},[ elx("label",{class:"fl",text:"Кому"}), elx("div",{style:"font-weight:600;font-size:14px"},[txt(userName(P,sheet.targetId))]) ]));
+    }
+
+    // Выбор второй смены (взамен) — мини-календарь смен нужного человека
+    var poolUid = pivotMine? sheet.targetId : myId;
+    var canPickOther = pivotMine? !!sheet.targetId : true;
+    if(canPickOther){
+      var pname = pivotMine? userName(P,sheet.targetId) : "вашего графика";
+      host.append(elx("label",{class:"fl",text: (pivotMine?"Какую смену "+pname+" берёте взамен":"Какую свою смену отдаёте взамен")+" — выберите в календаре" }));
+      host.append(buildPickerGrid(poolUid));
+      var noBtn=elx("button",{class:"noswap"+(sheet.noSwap?" on":""),type:"button",onclick:function(){ sheet.noSwap=!sheet.noSwap; if(sheet.noSwap) sheet.otherShiftId=""; render(); }});
+      noBtn.append(ico("swap","ic")); noBtn.append(txt(pivotMine?"Без обмена — просто отдаю смену":"Без обмена — просто беру смену"));
+      host.append(noBtn);
+    }
+
+    var ready2 = pivotMine? !!sheet.targetId : true;
+    var picked = sheet.otherShiftId || sheet.noSwap;
+    var send=btn("Отправить предложение","primary block",function(){ submitSheet(pivotMine); },"swap");
+    if(!ready2 || !picked) send.disabled=true;
+    host.append(send);
+    host.append(btn("Отмена","ghost block",function(){ closeModal(); }));
+  }
+  function idOf(s){ for(var k in schedule){ if(schedule[k]===s) return k; } return null; }
+
+  function buildPickerGrid(uid){
+    var pm=sheet.pickMonth||{y:new Date().getFullYear(),m:new Date().getMonth()}; var y=pm.y,m=pm.m;
+    var now=new Date(), atFloor=(y===now.getFullYear()&&m===now.getMonth());
+    var wrap=elx("div",{class:"pick"});
+    wrap.append(elx("div",{class:"pick-nav"},[
+      elx("button",{class:"navbtn",type:"button","aria-label":"Назад",disabled:atFloor?"":null,onclick:function(){ var d=new Date(y,m-1,1); if(d>=new Date(now.getFullYear(),now.getMonth(),1)){ sheet.pickMonth={y:d.getFullYear(),m:d.getMonth()}; render(); } }},[ico("chevL","ic")]),
+      elx("div",{class:"mlabel",text:cap(monthName(y,m))}),
+      elx("button",{class:"navbtn",type:"button","aria-label":"Вперёд",onclick:function(){ var d=new Date(y,m+1,1); sheet.pickMonth={y:d.getFullYear(),m:d.getMonth()}; render(); }},[ico("chev","ic")])
+    ]));
+    var dow=elx("div",{class:"pick-dow"}); DOWK.forEach(function(w){ dow.append(elx("span",{text:w})); }); wrap.append(dow);
+    var map=monthMap(y,m,uid);
+    var firstIx=(new Date(y,m,1).getDay()+6)%7, dim=new Date(y,m+1,0).getDate(), any=false;
+    var grid=elx("div",{class:"pick-grid"});
+    for(var bl=0;bl<firstIx;bl++) grid.append(elx("div",{class:"pc blank"}));
+    for(var day=1;day<=dim;day++){ (function(day){
+      var key=dateKey(new Date(y,m,day)); var ids=(map[key]||[]);
+      if(!ids.length){ grid.append(elx("div",{class:"pc"},[ elx("div",{class:"pn",text:String(day)}) ])); return; }
+      any=true; var sid=ids[0], s=schedule[sid], k=kindOf(s.start), seld=sheet.otherShiftId===sid;
+      grid.append(elx("div",{class:"pc has k-"+k+(seld?" sel":""),title:(s.start||"")+"–"+(s.end||""),onclick:function(){ sheet.otherShiftId=sid; sheet.noSwap=false; render(); }},[
+        elx("div",{class:"pn",text:String(day)}),
+        elx("div",{class:"pk"},[ ico(k==="night"?"moon":"sun","ic") ])
+      ]));
+    })(day); }
+    wrap.append(grid);
+    if(!any) wrap.append(elx("div",{style:"text-align:center;color:var(--fg-faint);font-size:12.5px;padding:8px 2px"},[txt("В этом месяце смен нет — листайте вперёд")]));
+    return wrap;
+  }
+
+  function submitSheet(pivotMine){
+    if(!guard()) return;
+    var pivot=schedule[sheet.pivotId]; if(!pivot){ closeModal(); return; }
+    var toId, offerShiftId=null, wantShiftId=null;
+    if(pivotMine){ toId=sheet.targetId; if(!toId){ toast("Выберите коллегу"); return; }
+      offerShiftId=sheet.pivotId; wantShiftId=sheet.otherShiftId||null;
+    } else { toId=pivot.userId; wantShiftId=sheet.pivotId; offerShiftId=sheet.otherShiftId||null; }
+    writing=true;
+    db.collection("swaps").add({ fromId:myId, toId:toId, offerShiftId:offerShiftId, wantShiftId:wantShiftId,
+      status:"pending", createdAt:Date.now(), resolvedAt:null })
+      .then(function(){ writing=false; closeModal(); setTab("swap"); toast("Предложение отправлено"); })
+      .catch(function(e){ writing=false; render(); toast(e&&e.code==="invalid_argument"?"Нет прав на запись — нужен доступ Contributor":"Не удалось отправить"); });
+  }
+
+  // ---------- действия с хранилищем ----------
+  function guard(){ if(writing) return false; if(!db){toast("Нет связи с хранилищем");return false;} if(!myId){toast("Войдите в аккаунт");return false;} return true; }
+
+  function flushIfNewDay(cur){ // возвращает {secs,dayKey,workStart} уже приведённые к сегодня
+    var tk=todayKey(); var ws=cur.workStart||null; var secs=cur.todaySecs||0; var dk=cur.dayKey||tk;
+    if(dk!==tk){ var flush=secs + (ws? Math.max(0,(Date.now()-ws)/1000):0);
+      if(flush>30) saveHistory(dk,flush);
+      secs=0; ws=(cur.status==="on"&&!cur.lunch)? Date.now():null; dk=tk; }
+    return {secs:secs,workStart:ws,dayKey:dk};
+  }
+  function setStatus(newStatus,newLunch){
+    if(!guard()) return;
+    var cur=roster[myId]||{status:"off",lunch:false,workStart:null,todaySecs:0,dayKey:todayKey()};
+    var base=flushIfNewDay(cur); var now=Date.now();
+    var wasCount=(cur.status==="on"&&!cur.lunch); var ws=base.workStart; var secs=base.secs;
+    if(wasCount && cur.dayKey===todayKey() && ws){ secs+=Math.max(0,(now-ws)/1000); ws=null; }
+    else if(wasCount && ws){ ws=null; }
+    var willCount=(newStatus==="on"&&!newLunch);
+    if(willCount) ws=now; else ws=null;
+    writing=true; render();
+    db.collection("roster").doc(myId).set({ status:newStatus, lunch:!!newLunch, updatedAt:now,
+      workStart:ws, todaySecs:secs, dayKey:todayKey() })
+      .then(function(){ writing=false; render(); })
+      .catch(function(e){ writing=false; render(); toast(e&&e.code==="invalid_argument"?"Нет прав на запись — нужен доступ Contributor":"Не удалось сохранить статус"); });
+  }
+  function saveHistory(dayK,secs){
+    var cur=(sessions[myId]&&sessions[myId].days)?Object.assign({},sessions[myId].days):{};
+    cur[dayK]=(cur[dayK]||0)+secs;
+    // оставить последние 31 запись
+    var ks=Object.keys(cur).sort(); while(ks.length>31){ delete cur[ks.shift()]; }
+    db.collection("sessions").doc(myId).set({days:cur,updatedAt:Date.now()}).catch(function(e){ console.warn("hist",e); });
+  }
+
+  function claimSlot(uid){ if(!guard()) return; if(!uid) return;
+    var keys=Object.keys(schedule).filter(function(k){ return schedule[k].userId===uid; });
+    if(!keys.length){ toast("Смены не найдены"); return; }
+    writing=true; render();
+    var i=0,done=0;
+    (function next(){ if(i>=keys.length){ writing=false; render(); toast("Привязано смен: "+done); return; }
+      var k=keys[i++]; db.collection("schedule").doc(k).update({userId:myId})
+        .then(function(){ done++; next(); }).catch(function(){ next(); }); })();
+  }
+
+  function addShift(date,start,end){ if(!guard()) return; writing=true;
+    db.collection("schedule").add({userId:myId,date:date,start:start,end:end,createdAt:Date.now()})
+      .then(function(){ writing=false; addFor=null; render(); toast("Смена добавлена"); })
+      .catch(function(e){ writing=false; render(); toast("Не удалось добавить"); }); }
+
+  function accept(id){ if(!guard()) return; var s=swaps[id]; if(!s){ return; }
+    writing=true; render();
+    var ops=[];
+    // offerShift (от fromId) -> toId ; wantShift (от toId) -> fromId
+    if(s.offerShiftId && schedule[s.offerShiftId]) ops.push(db.collection("schedule").doc(s.offerShiftId).update({userId:s.toId}));
+    if(s.wantShiftId && schedule[s.wantShiftId]) ops.push(db.collection("schedule").doc(s.wantShiftId).update({userId:s.fromId}));
+    Promise.all(ops).then(function(){
+      return db.collection("swaps").doc(id).update({status:"accepted",resolvedAt:Date.now()});
+    }).then(function(){ writing=false; render(); toast("Обмен выполнен — смены обновлены"); })
+      .catch(function(e){ writing=false; render(); toast("Не удалось выполнить обмен"); });
+  }
+  function resolve(id,status){ if(!guard()) return; writing=true; render();
+    db.collection("swaps").doc(id).update({status:status,resolvedAt:Date.now()})
+      .then(function(){ writing=false; render(); toast(status==="declined"?"Отклонено":"Отменено"); })
+      .catch(function(e){ writing=false; render(); toast("Не удалось"); }); }
+  function dismiss(id){ if(!guard()) return; writing=true;
+    db.collection("swaps").doc(id).delete().then(function(){ writing=false; render(); }).catch(function(e){ writing=false; render(); }); }
+
+  // ---------- общие UI-куски ----------
+  function skeleton(n){ var w=elx("div",{style:"display:flex;flex-direction:column;gap:10px;padding:6px 0"}); for(var i=0;i<n;i++) w.append(elx("div",{style:"height:42px;border-radius:10px;background:var(--surface-2)"})); return w; }
+  function empty(icon,text){ var e=elx("div",{class:"empty"}); e.append(ico(icon,"ic")); e.firstChild.style.width="34px"; e.firstChild.style.height="34px";
+    text.split("\n").forEach(function(l,i){ if(i)e.append(elx("br")); e.append(txt(l)); }); return e; }
+
+  // ---------- вкладки ----------
+  function setTab(name){ activeTab=name;
+    ["shift","cal","swap"].forEach(function(n){ document.getElementById("tab-"+n).setAttribute("aria-selected", n===name?"true":"false");
+      document.getElementById("pane-"+n).hidden = n!==name; });
+    render(); window.scrollTo({top:0,behavior:"smooth"});
+  }
+  ["shift","cal","swap"].forEach(function(n){ document.getElementById("tab-"+n).addEventListener("click",function(){ setTab(n); }); });
+
+  // ---------- подписки ----------
+  function onErr(w){ return function(e){ console.warn(w,e); if(e&&e.code==="revoked"){ db=null; render(); } }; }
+  function sub(coll,store,flag){ try{ db.collection(coll).onSnapshot(function(snap){ var o={}; snap.docs.forEach(function(d){ if(d.exists) o[d.id]=d.data(); });
+      if(store==="roster") roster=o; else if(store==="sessions") sessions=o; else if(store==="schedule") schedule=o; else swaps=o;
+      ready[flag]=true; if(store==="schedule") maybeAutoJump(); render(); }, onErr(coll)); }catch(e){ console.warn(e); } }
+
+  function start(){
+    applyTheme(curTheme()); updateThemeBtn();
+    var tb=document.getElementById("themeBtn"); if(tb) tb.addEventListener("click",toggleTheme);
+    try{ if(window.matchMedia){ window.matchMedia("(prefers-color-scheme:dark)").addEventListener("change",function(){ if(curTheme()==="system") updateThemeBtn(); }); } }catch(e){}
+    render();
+    var FB=window.__FB;
+    if(!FB){ document.getElementById("livetxt").textContent="нет связи"; render(); return; }
+    db=FB.db; user=FB.user;
+    FB.setRenderHook(render);
+    var subscribed=false;
+    FB.onAuth(function(uid){
+      myId=uid||null;
+      if(uid && !subscribed){ subscribed=true;
+        sub("roster","roster","roster"); sub("sessions","sessions","sessions"); sub("schedule","schedule","schedule"); sub("swaps","swaps","swaps");
+        setTimeout(function(){ var c=roster[myId]; if(c && c.dayKey && c.dayKey!==todayKey()){ setStatus(c.status||"off", !!c.lunch); } },1500);
+      }
+      render();
+    });
+    setInterval(function(){ if(ready.roster||ready.sessions) render(); },60000);
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",start); else start();
+})();
+</script>
+</body>
+</html>
