@@ -327,8 +327,10 @@
   catch(e){ console.error("Firebase init failed",e); window.__FB=null; return; }
 
   var ADMINS=["dzmitry.guk@bbsoft.bet","alexander.ozerov@bbsoft.bet"];
-  var curUid=null, curAdmin=false, authReady=false, usersSubbed=false, renderHook=null;
+  var DOMAIN="bbsoft.bet";
+  var curUid=null, curAdmin=false, authReady=false, usersSubbed=false, renderHook=null, domainRejected=false;
   var usersCache={}; var authCbs=[];
+  function workEmail(e){ e=String(e||"").toLowerCase(); return e.slice(-(DOMAIN.length+1))==="@"+DOMAIN; }
 
   function writeProfile(u){
     try{ fs.collection("users").doc(u.uid).set({name:(u.displayName||u.email||"Сотрудник"),avatar:(u.photoURL||"")},{merge:true}); }catch(e){}
@@ -341,6 +343,13 @@
   }
 
   auth.onAuthStateChanged(function(u){
+    if(u && !workEmail(u.email)){ // не рабочий аккаунт — не пускаем
+      domainRejected=true; curUid=null; curAdmin=false; authReady=true;
+      try{ auth.signOut(); }catch(e){}
+      authCbs.forEach(function(cb){ try{ cb(null); }catch(e){} });
+      return;
+    }
+    if(u) domainRejected=false;
     curUid=u?u.uid:null; authReady=true;
     curAdmin=!!(u && u.email && ADMINS.indexOf(String(u.email).toLowerCase())>=0);
     if(u){ writeProfile(u); if(!usersSubbed){ usersSubbed=true; subUsers(); } }
@@ -361,6 +370,7 @@
 
   function signIn(){
     var p=new firebase.auth.GoogleAuthProvider();
+    try{ p.setCustomParameters({hd:DOMAIN, prompt:"select_account"}); }catch(e){}
     auth.signInWithPopup(p).catch(function(e){
       var c=e&&e.code||"";
       if(c==="auth/popup-blocked"||c==="auth/cancelled-popup-request"||c==="auth/popup-closed-by-user"||c==="auth/operation-not-supported-in-this-environment"){
@@ -388,6 +398,7 @@
     },
     onAuth:function(cb){ authCbs.push(cb); if(authReady) try{ cb(curUid); }catch(e){} },
     isAdmin:function(){ return curAdmin; },
+    domainRejected:function(){ return domainRejected; },
     setRenderHook:function(fn){ renderHook=fn; },
     signIn:signIn, signOut:signOut, seedSchedule:seedSchedule
   };
@@ -600,7 +611,11 @@
     ]));
     if(!db){ box.append(elx("div",{class:"note-info",style:"margin-top:16px"},[ico("info"),txt("Нет связи с базой. Обновите страницу.")])); return; }
     if(!myId){
-      box.append(elx("div",{class:"note-info",style:"margin-top:16px"},[ico("info"),txt("Войдите через рабочий Google-аккаунт, чтобы отмечать смену, вести часы и меняться сменами.")]));
+      if(window.__FB && window.__FB.domainRejected && window.__FB.domainRejected()){
+        box.append(elx("div",{class:"note-info",style:"margin-top:16px;border-color:var(--danger);color:var(--danger)"},[ico("info"),txt("Вход только с рабочего аккаунта @bbsoft.bet. Выберите рабочую почту.")]));
+      } else {
+        box.append(elx("div",{class:"note-info",style:"margin-top:16px"},[ico("info"),txt("Войдите рабочим Google-аккаунтом @bbsoft.bet, чтобы отмечать смену, вести часы и меняться сменами.")]));
+      }
       box.append(elx("div",{class:"actions"},[ btn("Войти через Google","primary",function(){ window.__FB.signIn(); },"users") ]));
       return;
     }
@@ -610,9 +625,9 @@
     else { acts.append(btn("Вернуться с обеда","on",function(){setStatus("on",false);})); acts.append(btn("Завершить смену","ghost",function(){setStatus("off",false);})); }
     box.append(acts);
 
-    // привязка импортированных смен к своему аккаунту
+    // привязка импортированных смен к своему аккаунту — только пока сам ничего не привязал
     var imp=importedSlots();
-    if(imp.length){
+    if(imp.length && myImportedGroups().length===0){
       var sel=elx("select",{class:"se",id:"claim-sel"});
       imp.forEach(function(it){ sel.append(elx("option",{value:it.uid,text:it.name})); });
       if(meP&&meP.name){ imp.forEach(function(it){ if(it.name===meP.name) sel.value=it.uid; }); }
