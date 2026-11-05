@@ -308,6 +308,23 @@
   .sheet .pivot{background:var(--surface-2);border-radius:10px;padding:11px 13px;font-size:13px}
   .sheet .pivot .nm{font-weight:600}
 
+  /* История смен */
+  .slog{display:flex;flex-direction:column;gap:6px}
+  .slog-item{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--border);border-radius:11px;background:var(--surface)}
+  .slog-item.live{border-color:var(--accent);background:var(--accent-soft)}
+  .slog-item .bar-k2{width:4px;align-self:stretch;min-height:34px;border-radius:3px;background:var(--off);flex:none}
+  .slog-item .bar-k2.k-day{background:var(--on)} .slog-item .bar-k2.k-night{background:var(--night)}
+  .slog-mid{flex:1;min-width:0}
+  .slog-date{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13.5px;text-transform:capitalize}
+  .slog-date .ic{width:14px;height:14px;flex:none}
+  .slog-item.k-day .slog-date .ic{color:var(--on)} .slog-item.k-night .slog-date .ic{color:var(--night)}
+  .slog-time{font-family:var(--mono);font-size:12.5px;color:var(--fg-muted);font-variant-numeric:tabular-nums;margin-top:3px}
+  .slog-dur{text-align:right;white-space:nowrap}
+  .slog-dur b{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+  .slog-live{font-size:11px;font-weight:700;color:var(--accent);margin-top:2px}
+  .slog-day{font-size:12px;font-weight:700;letter-spacing:.02em;color:var(--fg-muted);text-transform:uppercase;margin:10px 2px 2px}
+  .slog-day:first-child{margin-top:2px}
+
   #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));
     background:var(--fg);color:var(--bg);font-size:13px;font-weight:500;padding:10px 16px;border-radius:10px;box-shadow:var(--shadow);
     opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:50;max-width:88vw;text-align:center}
@@ -390,6 +407,8 @@
 
   window.__FB={
     db:{ collection:col },
+    rawDb:fs,
+    FieldValue:(firebase.firestore&&firebase.firestore.FieldValue)||null,
     user:{
       id:function(){ return Promise.resolve(curUid); },
       can:function(){ return Promise.resolve(!!curUid); },
@@ -420,7 +439,8 @@
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" id="tab-shift" aria-selected="true" aria-controls="pane-shift">Смена</button>
       <button class="tab" role="tab" id="tab-cal" aria-selected="false" aria-controls="pane-cal">Календарь</button>
-      <button class="tab" role="tab" id="tab-swap" aria-selected="false" aria-controls="pane-swap">Обмены&nbsp;сменами</button>
+      <button class="tab" role="tab" id="tab-swap" aria-selected="false" aria-controls="pane-swap">Обмены</button>
+      <button class="tab" role="tab" id="tab-hist" aria-selected="false" aria-controls="pane-hist">История</button>
     </div>
   </div>
 </div>
@@ -455,6 +475,13 @@
       <div class="sec-body" id="outBody"></div>
     </section>
   </div>
+
+  <div class="pane" id="pane-hist" role="tabpanel" aria-labelledby="tab-hist" hidden>
+    <section class="card" aria-labelledby="hLog">
+      <div class="sec-h"><h2 id="hLog">История смен</h2><span class="count" id="histLogCount"></span></div>
+      <div class="sec-body" id="histLogBody"></div>
+    </section>
+  </div>
 </main>
 
 <div class="scrim" id="scrim" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Предложить обмен"></div></div>
@@ -464,6 +491,8 @@
 (function(){
   "use strict";
   var db=null, user=null, myId=null;
+  var rawDb=null, FV=null;              // прямой доступ к Firestore (для транзакций и FieldValue)
+  var MAXSEG=24*3600;                   // защита от «зависшего» workStart (устройство уснуло на смене)
   var roster={}, sessions={}, schedule={}, swaps={};
   var writing=false, activeTab="shift";
   var ready={roster:false,sessions:false,schedule:false,swaps:false};
@@ -505,6 +534,7 @@
     var d=new Date(ts); return d.toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"})+", "+d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}); }
   function fmtDur(secs){ secs=Math.max(0,Math.round(secs)); var h=Math.floor(secs/3600), m=Math.floor((secs%3600)/60);
     if(h&&m) return h+" ч "+m+" мин"; if(h) return h+" ч"; return m+" мин"; }
+  function plural(n,one,few,many){ var a=Math.abs(n)%100, b=a%10; if(a>10&&a<20)return many; if(b>1&&b<5)return few; if(b===1)return one; return many; }
   function stateOf(d){ if(!d||d.status!=="on") return "off"; return d.lunch?"lunch":"on"; }
   var LABEL={on:"На смене",lunch:"На обеде",off:"Не на смене"};
   function initials(name){ if(!name) return ""; var p=name.trim().split(/\s+/); return ((p[0]||"")[0]||"").toUpperCase()+((p[1]||"")[0]||"").toUpperCase(); }
@@ -554,7 +584,7 @@
       return Object.keys(m).map(function(k){return m[k];}).sort(function(a,b){return a.name.localeCompare(b.name);}); }
   function shiftLabel(id){ var s=schedule[id]; if(!s) return null; return s; }
   function liveToday(d){ if(!d) return 0; if(d.dayKey!==todayKey()) return 0; var base=d.todaySecs||0;
-    if(d.status==="on"&&!d.lunch&&d.workStart) base+=(Date.now()-d.workStart)/1000; return base; }
+    if(d.status==="on"&&!d.lunch&&d.workStart){ var s=(Date.now()-d.workStart)/1000; if(s>0&&s<MAXSEG) base+=s; } return base; }
   function incomingCount(){ var c=0; Object.keys(swaps).forEach(function(k){var s=swaps[k]; if(s.status==="pending"&&s.toId===myId)c++;}); return c; }
 
   function toMin(t){ if(!t)return 0; var p=String(t).split(":"); return (+p[0])*60+(+p[1]||0); }
@@ -582,10 +612,11 @@
     if(!db){ dot.className="dot"; lt.textContent="нет связи"; } else { dot.className="dot ok anim"; lt.textContent="вживую"; }
     // tab badge
     var inc=db?incomingCount():0; var tabSwap=document.getElementById("tab-swap");
-    tabSwap.textContent="Обмены сменами"; if(inc){ tabSwap.append(elx("span",{class:"badge",text:String(inc)})); }
+    tabSwap.textContent="Обмены"; if(inc){ tabSwap.append(elx("span",{class:"badge",text:String(inc)})); }
 
     if(activeTab==="shift"){ paintMe(P); paintHist(P); paintTeam(P); }
     else if(activeTab==="cal"){ paintCal(P); }
+    else if(activeTab==="hist"){ paintHistory(P); }
     else { paintSwaps(P); }
     if(confirmModal) paintConfirm(); else if(editModal) paintEditSheet(P); else if(dayModal) paintDaySheet(P); else if(sheet) paintSheet(P);
   }
@@ -687,6 +718,55 @@
     cnt.textContent="тек. неделя";
     body.append(wk);
     body.append(elx("div",{class:"wk-sum"},[ txt("Отработано за неделю: "), elx("b",{text:fmtDur(weekSecs)}) ]));
+  }
+
+  function paintHistory(P){
+    var body=document.getElementById("histLogBody"), cnt=document.getElementById("histLogCount"); clear(body); cnt.textContent="";
+    if(!db){ body.append(skeleton(3)); return; }
+    if(!myId){ body.append(empty("cal","История появится после входа в аккаунт.")); return; }
+    if(!ready.sessions){ body.append(skeleton(3)); return; }
+
+    var log=(sessions[myId]&&Array.isArray(sessions[myId].log))?sessions[myId].log.slice():[];
+    var items=log.filter(function(e){return e&&e.start;}).map(function(e){ return {start:e.start,end:e.end||null,secs:e.secs||0,live:false}; });
+
+    // текущая, ещё не завершённая смена — показываем сверху
+    var cur=roster[myId];
+    if(cur && cur.status && cur.status!=="off" && cur.shiftStart){
+      var liveSecs=(cur.shiftSecs||0);
+      if(cur.status==="on" && !cur.lunch && cur.workStart){ var s=(Date.now()-cur.workStart)/1000; if(s>0&&s<MAXSEG) liveSecs+=s; }
+      items.push({start:cur.shiftStart,end:null,secs:liveSecs,live:true});
+    }
+
+    if(!items.length){ body.append(empty("cal","Пока нет завершённых смен.\nОтметьте смену на вкладке «Смена» —\nи она появится здесь.")); return; }
+
+    cnt.textContent = log.length ? (log.length+" "+plural(log.length,"смена","смены","смен")) : "";
+    items.sort(function(a,b){ return b.start-a.start; });
+
+    var box=elx("div",{class:"slog"}); var lastGrp=null;
+    items.forEach(function(it){
+      var d=new Date(it.start);
+      var k=kindOf(pad(d.getHours())+":"+pad(d.getMinutes()));
+      var grp=d.toLocaleDateString("ru-RU",{month:"long",year:"numeric"});
+      if(grp!==lastGrp){ lastGrp=grp; box.append(elx("div",{class:"slog-day",text:cap(grp)})); }
+
+      var dateStr=d.toLocaleDateString("ru-RU",{weekday:"short",day:"2-digit",month:"short"});
+      var startStr=d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+      var endStr=it.end? new Date(it.end).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}) : "…";
+
+      var mid=elx("div",{class:"slog-mid"},[
+        elx("div",{class:"slog-date"},[ ico(k==="night"?"moon":"sun","ic"), txt(cap(dateStr)) ]),
+        elx("div",{class:"slog-time",text: startStr+" → "+endStr })
+      ]);
+      var right=elx("div",{class:"slog-dur"},[ elx("b",{text:fmtDur(it.secs)}) ]);
+      if(it.live) right.append(elx("div",{class:"slog-live",text:"идёт сейчас"}));
+
+      box.append(elx("div",{class:"slog-item "+kindClass(k)+(it.live?" live":"")},[
+        elx("div",{class:"bar-k2 "+kindClass(k)}), mid, right
+      ]));
+    });
+    body.append(box);
+    body.append(elx("div",{class:"note-info",style:"margin-top:14px"},[ico("info"),
+      txt("Смена попадает в историю после нажатия «Завершить смену». Начало — когда вы вышли на смену, конец — когда завершили; длительность не учитывает обед.")]));
   }
 
   function paintTeam(P){
@@ -1104,34 +1184,64 @@
   // ---------- действия с хранилищем ----------
   function guard(){ if(writing) return false; if(!db){toast("Нет связи с хранилищем");return false;} if(!myId){toast("Войдите в аккаунт");return false;} return true; }
 
-  function flushIfNewDay(cur){ // возвращает {secs,dayKey,workStart} уже приведённые к сегодня
-    var tk=todayKey(); var ws=cur.workStart||null; var secs=cur.todaySecs||0; var dk=cur.dayKey||tk;
-    if(dk!==tk){ var flush=secs + (ws? Math.max(0,(Date.now()-ws)/1000):0);
-      if(flush>30) saveHistory(dk,flush);
-      secs=0; ws=(cur.status==="on"&&!cur.lunch)? Date.now():null; dk=tk; }
-    return {secs:secs,workStart:ws,dayKey:dk};
+  // Чистая функция: из текущего состояния документа roster (cur) и желаемого статуса
+  // вычисляет новый roster и патч для sessions (перенос часов за прошлый день + запись в журнал смен).
+  // Ничего не читает из внешнего состояния — работает и в транзакции (с серверными данными), и в запасном пути.
+  function computeStatus(cur,newStatus,newLunch,now,tk){
+    cur=cur||{status:"off",lunch:false,workStart:null,todaySecs:0,shiftSecs:0,shiftStart:null,dayKey:tk};
+    var ws=cur.workStart||null, todaySecs=cur.todaySecs||0, dk=cur.dayKey||tk;
+    var shiftSecs=cur.shiftSecs||0, shiftStart=cur.shiftStart||null;
+    var wasCount=(cur.status==="on"&&!cur.lunch);
+    if(wasCount && ws){ var seg=Math.max(0,(now-ws)/1000); if(seg>MAXSEG) seg=0; todaySecs+=seg; shiftSecs+=seg; ws=null; }
+    // смена суток — перенести отработанное за старый день в недельную историю (sessions.days)
+    var sessPatch=null;
+    if(dk!==tk){
+      if(todaySecs>30){ var dd={}; dd[dk]=FV?FV.increment(Math.round(todaySecs)):Math.round(todaySecs); sessPatch={days:dd}; }
+      todaySecs=0; dk=tk;
+    }
+    var wasOff=(cur.status==="off"), willOff=(newStatus==="off"), logEntry=null;
+    if(wasOff && !willOff){ shiftStart=now; shiftSecs=0; }            // начало новой смены
+    if(!wasOff && willOff){                                            // завершение смены → запись в журнал
+      var total=Math.round(shiftSecs); var st=shiftStart||(now-total*1000);
+      if(total>30) logEntry={start:st,end:now,secs:total};
+      shiftStart=null; shiftSecs=0;
+    }
+    var willCount=(newStatus==="on"&&!newLunch); ws=willCount?now:null;
+    if(logEntry){ sessPatch=sessPatch||{}; sessPatch.log=FV?FV.arrayUnion(logEntry):[logEntry]; }
+    return { roster:{status:newStatus,lunch:!!newLunch,updatedAt:now,workStart:ws,
+             todaySecs:todaySecs,shiftSecs:shiftSecs,shiftStart:shiftStart,dayKey:tk}, sessPatch:sessPatch };
   }
+
   function setStatus(newStatus,newLunch){
     if(!guard()) return;
-    var cur=roster[myId]||{status:"off",lunch:false,workStart:null,todaySecs:0,dayKey:todayKey()};
-    var base=flushIfNewDay(cur); var now=Date.now();
-    var wasCount=(cur.status==="on"&&!cur.lunch); var ws=base.workStart; var secs=base.secs;
-    if(wasCount && cur.dayKey===todayKey() && ws){ secs+=Math.max(0,(now-ws)/1000); ws=null; }
-    else if(wasCount && ws){ ws=null; }
-    var willCount=(newStatus==="on"&&!newLunch);
-    if(willCount) ws=now; else ws=null;
+    var now=Date.now(), tk=todayKey();
+
+    // Запасной путь (если прямого доступа к Firestore нет) — без транзакции и без истории.
+    if(!rawDb || !FV){
+      var r0=computeStatus(roster[myId],newStatus,newLunch,now,tk);
+      writing=true; render();
+      db.collection("roster").doc(myId).set(r0.roster)
+        .then(function(){ writing=false; render(); })
+        .catch(function(e){ writing=false; render(); toast(e&&e.code==="invalid_argument"?"Нет прав на запись — нужен доступ Contributor":"Не удалось сохранить статус"); });
+      return;
+    }
+
+    // Основной путь: транзакция читает актуальный документ с сервера, поэтому
+    // устаревшая копия на другом устройстве больше не затирает накопленное время.
+    var rRef=rawDb.collection("roster").doc(myId);
+    var sRef=rawDb.collection("sessions").doc(myId);
     writing=true; render();
-    db.collection("roster").doc(myId).set({ status:newStatus, lunch:!!newLunch, updatedAt:now,
-      workStart:ws, todaySecs:secs, dayKey:todayKey() })
-      .then(function(){ writing=false; render(); })
-      .catch(function(e){ writing=false; render(); toast(e&&e.code==="invalid_argument"?"Нет прав на запись — нужен доступ Contributor":"Не удалось сохранить статус"); });
-  }
-  function saveHistory(dayK,secs){
-    var cur=(sessions[myId]&&sessions[myId].days)?Object.assign({},sessions[myId].days):{};
-    cur[dayK]=(cur[dayK]||0)+secs;
-    // оставить последние 31 запись
-    var ks=Object.keys(cur).sort(); while(ks.length>31){ delete cur[ks.shift()]; }
-    db.collection("sessions").doc(myId).set({days:cur,updatedAt:Date.now()}).catch(function(e){ console.warn("hist",e); });
+    rawDb.runTransaction(function(t){
+      return t.get(rRef).then(function(snap){
+        var cur=(snap&&snap.exists)?snap.data():null;
+        var r=computeStatus(cur,newStatus,newLunch,now,tk);
+        t.set(rRef,r.roster);
+        if(r.sessPatch){ r.sessPatch.updatedAt=now; t.set(sRef,r.sessPatch,{merge:true}); }
+        return null;
+      });
+    }).then(function(){ writing=false; render(); })
+      .catch(function(e){ writing=false; render(); console.warn("setStatus",e);
+        toast(e&&e.code==="invalid_argument"?"Нет прав на запись — нужен доступ Contributor":"Не удалось сохранить статус — проверьте связь"); });
   }
 
   function claimSlot(uid){ if(!guard()) return; if(!uid) return;
@@ -1187,11 +1297,11 @@
 
   // ---------- вкладки ----------
   function setTab(name){ activeTab=name;
-    ["shift","cal","swap"].forEach(function(n){ document.getElementById("tab-"+n).setAttribute("aria-selected", n===name?"true":"false");
+    ["shift","cal","swap","hist"].forEach(function(n){ document.getElementById("tab-"+n).setAttribute("aria-selected", n===name?"true":"false");
       document.getElementById("pane-"+n).hidden = n!==name; });
     render(); window.scrollTo({top:0,behavior:"smooth"});
   }
-  ["shift","cal","swap"].forEach(function(n){ document.getElementById("tab-"+n).addEventListener("click",function(){ setTab(n); }); });
+  ["shift","cal","swap","hist"].forEach(function(n){ document.getElementById("tab-"+n).addEventListener("click",function(){ setTab(n); }); });
 
   // ---------- подписки ----------
   function onErr(w){ return function(e){ console.warn(w,e); if(e&&e.code==="revoked"){ db=null; render(); } }; }
@@ -1206,7 +1316,7 @@
     render();
     var FB=window.__FB;
     if(!FB){ document.getElementById("livetxt").textContent="нет связи"; render(); return; }
-    db=FB.db; user=FB.user;
+    db=FB.db; user=FB.user; rawDb=FB.rawDb||null; FV=FB.FieldValue||null;
     FB.setRenderHook(render);
     var subscribed=false;
     FB.onAuth(function(uid){
