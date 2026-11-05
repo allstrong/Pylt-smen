@@ -230,6 +230,9 @@
     display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center}
   .wkd.today{border-color:var(--accent)}
   .wkd.future{opacity:.45}
+  .wkd.tap{cursor:pointer;transition:border-color .12s,transform .05s}
+  .wkd.tap:hover{border-color:var(--accent)}
+  .wkd.tap:active{transform:translateY(1px)}
   .wkd .wd{font-size:10px;font-weight:700;color:var(--fg-faint);text-transform:uppercase;letter-spacing:.03em}
   .wkd .wn{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
   .wkd.today .wn{color:var(--accent)}
@@ -499,6 +502,7 @@
   var addFor=null;      // дата, для которой открыта форма добавления смены
   var sheet=null;       // state модалки обмена
   var dayModal=null;    // дата открытой карточки дня (модалка)
+  var hoursModal=null;  // дата открытого окна «часы за день» (из «Ваши часы»)
   var confirmModal=null;// {title,message,yes,onYes} — окно подтверждения
   var editModal=null;   // sid редактируемой смены (только для старших)
   var amAdmin=false;    // текущий пользователь — старший смены
@@ -618,10 +622,10 @@
     else if(activeTab==="cal"){ paintCal(P); }
     else if(activeTab==="hist"){ paintHistory(P); }
     else { paintSwaps(P); }
-    if(confirmModal) paintConfirm(); else if(editModal) paintEditSheet(P); else if(dayModal) paintDaySheet(P); else if(sheet) paintSheet(P);
+    if(confirmModal) paintConfirm(); else if(editModal) paintEditSheet(P); else if(dayModal) paintDaySheet(P); else if(hoursModal) paintHoursSheet(P); else if(sheet) paintSheet(P);
   }
 
-  function askConfirm(title,message,yesLabel,onYes){ sheet=null; dayModal=null;
+  function askConfirm(title,message,yesLabel,onYes){ sheet=null; dayModal=null; hoursModal=null;
     confirmModal={title:title,message:message,yes:yesLabel||"Да",onYes:onYes};
     document.getElementById("scrim").hidden=false; render(); }
   function paintConfirm(){ var host=document.getElementById("sheet"); clear(host);
@@ -708,7 +712,11 @@
       else if(sh && !isFuture) secs=shiftHours(sh)*3600;
       else if(sh && isFuture) secs=shiftHours(sh)*3600; // план на будущее
       if(!isFuture) weekSecs+=secs;
-      var cell=elx("div",{class:"wkd"+(isToday?" today":"")+(isFuture?" future":"")+(k?(" "+k):"")});
+      var tappable=!!(sh || shiftsForDay(key).length || (isToday && secs>30));
+      var cell=elx("div",{class:"wkd"+(isToday?" today":"")+(isFuture?" future":"")+(k?(" "+k):"")+(tappable?" tap":""),
+        onclick: tappable? (function(kk){ return function(){ openHours(kk); }; })(key) : null,
+        role: tappable?"button":null, tabindex: tappable?"0":null, title: tappable?"Показать начало и конец смены":null });
+      if(tappable) cell.addEventListener("keydown",function(ev){ if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); this.click(); } });
       cell.append(elx("div",{class:"wd",text:DOW[i]}));
       cell.append(elx("div",{class:"wn",text:String(dd.getDate())}));
       if(sh){ cell.append(ico(k==="night"?"moon":"sun","wk-ic")); cell.append(elx("div",{class:"wh",text: secs>30? Math.round(secs/3600)+"ч":"—"})); }
@@ -930,7 +938,7 @@
   }
 
   // окно редактирования смены (старший)
-  function openEdit(sid){ if(!amAdmin){ toast("Только для старшего смены"); return; } sheet=null; dayModal=null; confirmModal=null;
+  function openEdit(sid){ if(!amAdmin){ toast("Только для старшего смены"); return; } sheet=null; dayModal=null; confirmModal=null; hoursModal=null;
     editModal=sid; document.getElementById("scrim").hidden=false; render(); }
   function paintEditSheet(P){
     var host=document.getElementById("sheet"); clear(host);
@@ -1082,7 +1090,55 @@
   }
 
   // ---------- Модалки ----------
-  function openDay(key){ sheet=null; dayModal=key; document.getElementById("scrim").hidden=false; render(); }
+  function openDay(key){ sheet=null; hoursModal=null; confirmModal=null; editModal=null; dayModal=key; document.getElementById("scrim").hidden=false; render(); }
+  function openHours(key){ sheet=null; dayModal=null; confirmModal=null; editModal=null; hoursModal=key; document.getElementById("scrim").hidden=false; render(); }
+  function shiftsForDay(key){
+    var out=[];
+    var log=(sessions[myId]&&Array.isArray(sessions[myId].log))?sessions[myId].log:[];
+    log.forEach(function(e){ if(e&&e.start && dateKey(new Date(e.start))===key) out.push({start:e.start,end:e.end||null,secs:e.secs||0,live:false}); });
+    var cur=roster[myId];
+    if(cur && cur.status && cur.status!=="off" && cur.shiftStart && dateKey(new Date(cur.shiftStart))===key){
+      var ls=(cur.shiftSecs||0); if(cur.status==="on"&&!cur.lunch&&cur.workStart){ var s=(Date.now()-cur.workStart)/1000; if(s>0&&s<MAXSEG) ls+=s; }
+      out.push({start:cur.shiftStart,end:null,secs:ls,live:true});
+    }
+    out.sort(function(a,b){ return a.start-b.start; });
+    return out;
+  }
+  function paintHoursSheet(P){
+    var host=document.getElementById("sheet"); clear(host);
+    var key=hoursModal; var dt=parseKey(key);
+    host.append(elx("h3",{text:cap(dt.toLocaleDateString("ru-RU",{weekday:"long",day:"2-digit",month:"long"}))}));
+    var list=shiftsForDay(key);
+    if(list.length){
+      var box=elx("div",{class:"slog"});
+      list.forEach(function(it){
+        var d=new Date(it.start); var k=kindOf(pad(d.getHours())+":"+pad(d.getMinutes()));
+        var startStr=d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+        var endStr=it.end? new Date(it.end).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}) : "…";
+        var mid=elx("div",{class:"slog-mid"},[
+          elx("div",{class:"slog-date"},[ ico(k==="night"?"moon":"sun","ic"), txt(kindName(k)) ]),
+          elx("div",{class:"slog-time",text: startStr+" → "+endStr })
+        ]);
+        var right=elx("div",{class:"slog-dur"},[ elx("b",{text:fmtDur(it.secs)}) ]);
+        if(it.live) right.append(elx("div",{class:"slog-live",text:"идёт сейчас"}));
+        box.append(elx("div",{class:"slog-item "+kindClass(k)+(it.live?" live":"")},[ elx("div",{class:"bar-k2 "+kindClass(k)}), mid, right ]));
+      });
+      host.append(box);
+    } else {
+      var sh=shiftOnFor(myId,key);
+      if(sh){ var k2=kindOf(sh.start);
+        host.append(elx("div",{style:"background:var(--surface-2);border-radius:10px;padding:12px 14px"},[
+          elx("div",{class:"slog-date",style:"margin-bottom:5px"},[ ico(k2==="night"?"moon":"sun","ic"), txt("По графику: "+kindName(k2)) ]),
+          elx("div",{class:"slog-time",text: sh.start+" → "+sh.end+"  ·  "+fmtDur(shiftHours(sh)*3600) })
+        ]));
+        host.append(elx("div",{class:"note-info",style:"margin-top:12px"},[ ico("info"),
+          txt("Точное время начала и конца не записано — показано плановое время из графика. Фактические отметки сохраняются с момента этого обновления.") ]));
+      } else {
+        host.append(elx("div",{class:"note-info",style:"margin-top:4px"},[ ico("info"), txt("За этот день нет отметок смены.") ]));
+      }
+    }
+    host.append(btn("Закрыть","ghost block",function(){ closeModal(); }));
+  }
   function openSheet(pivotId){ var p=schedule[pivotId]; if(!p) return;
     if(!myId){ toast("Войдите, чтобы предлагать обмен"); return; }
     dayModal=null;
@@ -1090,7 +1146,7 @@
     sheet={pivotId:pivotId, targetId: p.userId===myId? null : p.userId, otherShiftId:"", noSwap:false, pickMonth:{y:pd.getFullYear(),m:pd.getMonth()}};
     document.getElementById("scrim").hidden=false; render();
   }
-  function closeModal(){ sheet=null; dayModal=null; confirmModal=null; editModal=null; document.getElementById("scrim").hidden=true; render(); }
+  function closeModal(){ sheet=null; dayModal=null; confirmModal=null; editModal=null; hoursModal=null; document.getElementById("scrim").hidden=true; render(); }
   document.getElementById("scrim").addEventListener("click",function(e){ if(e.target.id==="scrim") closeModal(); });
 
   function paintSheet(P){
