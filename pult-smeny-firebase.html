@@ -139,6 +139,9 @@
 
   ul.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
   .row{display:flex;align-items:center;gap:12px;padding:10px 8px;border-radius:10px;min-width:0}
+  .row.tap{cursor:pointer;transition:background .12s}
+  .row.tap:hover{background:var(--surface-2)}
+  .row.tap::after{content:"›";color:var(--fg-faint);font-size:20px;line-height:1;flex:none;margin-left:2px}
   .row:hover{background:var(--surface-2)}
   .row .ava{width:34px;height:34px;font-size:13px}
   .row .who{min-width:0;flex:1}
@@ -503,6 +506,8 @@
   var sheet=null;       // state модалки обмена
   var dayModal=null;    // дата открытой карточки дня (модалка)
   var hoursModal=null;  // дата открытого окна «часы за день» (из «Ваши часы»)
+  var superModal=null;  // uid участника — панель супервайзера (смены сотрудника)
+  var superForm=null;   // {uid,name,mode:'close'|'edit',origStart,startMs,endMs,secs}
   var confirmModal=null;// {title,message,yes,onYes} — окно подтверждения
   var editModal=null;   // sid редактируемой смены (только для старших)
   var amAdmin=false;    // текущий пользователь — старший смены
@@ -625,7 +630,7 @@
     else if(activeTab==="cal"){ paintCal(P); }
     else if(activeTab==="hist"){ paintHistory(P); }
     else { paintSwaps(P); }
-    if(confirmModal) paintConfirm(); else if(editModal) paintEditSheet(P); else if(dayModal) paintDaySheet(P); else if(hoursModal) paintHoursSheet(P); else if(sheet) paintSheet(P);
+    if(confirmModal) paintConfirm(); else if(editModal) paintEditSheet(P); else if(dayModal) paintDaySheet(P); else if(hoursModal) paintHoursSheet(P); else if(superForm) paintSuperForm(P); else if(superModal) paintSuperSheet(P); else if(sheet) paintSheet(P);
   }
 
   function askConfirm(title,message,yesLabel,onYes){ sheet=null; dayModal=null; hoursModal=null;
@@ -795,13 +800,124 @@
       var who=elx("div",{class:"who"}); var nmEl=elx("div",{class:"nm"}); nmEl.append(txt(nm)); if(id===myId) nmEl.append(elx("span",{class:"you",text:"вы"}));
       who.append(nmEl); who.append(elx("div",{class:"t",text: d.updatedAt?ago(d.updatedAt):""}));
       var rtSecs=(st!=="off")?liveShift(d):liveToday(d);
-      ul.append(elx("li",{class:"row"},[ avatar(P[id],nm), who,
+      var row=elx("li",{class:"row"+(amAdmin?" tap":"")},[ avatar(P[id],nm), who,
         elx("div",{class:"rt",text: rtSecs>30? fmtDur(rtSecs):""}),
-        elx("span",{class:"pill "+st,text:LABEL[st]}) ]));
+        elx("span",{class:"pill "+st,text:LABEL[st]}) ]);
+      if(amAdmin){ row.setAttribute("role","button"); row.setAttribute("tabindex","0"); row.title="Смена сотрудника (права старшего)";
+        row.addEventListener("click",(function(uid){ return function(){ openSuper(uid); }; })(id));
+        row.addEventListener("keydown",function(ev){ if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); this.click(); } }); }
+      ul.append(row);
     });
     body.append(ul);
+    if(amAdmin && ids.length) body.append(elx("div",{class:"note-info",style:"margin-top:12px"},[ico("info"),txt("Тап по сотруднику — завершить его смену или поправить часы (права старшего).")]));
   }
   function count(ids,st){ var c=0; ids.forEach(function(i){ if(stateOf(roster[i])===st)c++; }); return c; }
+
+  // ---------- Супервайзер: смены сотрудников (права старшего) ----------
+  function memberLog(uid){ return (sessions[uid]&&Array.isArray(sessions[uid].log))?sessions[uid].log.slice():[]; }
+  function dtLocal(ms){ var d=new Date(ms); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes()); }
+
+  function openSuper(uid){ if(!amAdmin){ toast("Только для старшего"); return; }
+    sheet=null; dayModal=null; confirmModal=null; editModal=null; hoursModal=null; superForm=null;
+    superModal=uid; document.getElementById("scrim").hidden=false; render(); }
+
+  function paintSuperSheet(P){
+    var host=document.getElementById("sheet"); clear(host);
+    var uid=superModal; var nm=nameFor(P,uid); var d=roster[uid]||{}; var st=stateOf(d);
+    host.append(elx("h3",{text:"Смена: "+nm}));
+    if(st!=="off" && d.shiftStart){
+      var startStr=new Date(d.shiftStart).toLocaleString("ru-RU",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
+      host.append(elx("div",{style:"background:var(--accent-soft);border:1px solid var(--accent);border-radius:11px;padding:12px 14px"},[
+        elx("div",{class:"slog-date",style:"margin-bottom:3px"},[ txt("Сейчас на смене") ]),
+        elx("div",{class:"slog-time",text:"с "+startStr+"  ·  идёт "+fmtDur(liveShift(d))})
+      ]));
+      host.append(btn("Завершить смену…","primary block",function(){ openSuperForm(uid,nm,"close"); }));
+    } else {
+      host.append(elx("div",{class:"note-info"},[ico("info"),txt(nm+" сейчас не на смене.")]));
+    }
+    var log=memberLog(uid).filter(function(e){return e&&e.start;}).sort(function(a,b){return b.start-a.start;}).slice(0,6);
+    if(log.length){
+      host.append(elx("div",{class:"slog-day",style:"margin-top:16px",text:"Последние смены"}));
+      var box=elx("div",{class:"slog"});
+      log.forEach(function(e){
+        var ds=new Date(e.start); var k=kindOf(pad(ds.getHours())+":"+pad(ds.getMinutes()));
+        var dateStr=ds.toLocaleDateString("ru-RU",{weekday:"short",day:"2-digit",month:"short"});
+        var startStr=ds.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+        var endStr=e.end? new Date(e.end).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}):"…";
+        var item=elx("div",{class:"slog-item tap "+kindClass(k),style:"cursor:pointer",title:"Поправить часы"},[
+          elx("div",{class:"bar-k2 "+kindClass(k)}),
+          elx("div",{class:"slog-mid"},[
+            elx("div",{class:"slog-date"},[ ico(k==="night"?"moon":"sun","ic"), txt(cap(dateStr)) ]),
+            elx("div",{class:"slog-time",text:startStr+" → "+endStr})
+          ]),
+          elx("div",{class:"slog-dur"},[ elx("b",{text:fmtDur(e.secs||0)}) ])
+        ]);
+        item.addEventListener("click",(function(st0){ return function(){ openSuperForm(uid,nm,"edit",st0); }; })(e.start));
+        box.append(item);
+      });
+      host.append(box);
+      host.append(elx("div",{class:"note-info",style:"margin-top:10px"},[ico("info"),txt("Тап по смене — изменить время/часы или удалить запись.")]));
+    }
+    host.append(btn("Закрыть","ghost block",function(){ closeModal(); }));
+  }
+
+  function openSuperForm(uid,nm,mode,origStart){
+    var now=Date.now(), startMs,endMs,secs;
+    if(mode==="close"){ var d=roster[uid]||{}; startMs=d.shiftStart||now; endMs=now; secs=Math.round(liveShift(d)); }
+    else { var log=memberLog(uid), e=null; for(var i=0;i<log.length;i++){ if(log[i]&&log[i].start===origStart){ e=log[i]; break; } }
+      if(!e){ toast("Смена не найдена"); return; } startMs=e.start; endMs=e.end||now; secs=Math.round(e.secs||0); }
+    superForm={uid:uid,name:nm,mode:mode,origStart:(mode==="edit"?origStart:null),startMs:startMs,endMs:endMs,secs:secs};
+    superModal=null; document.getElementById("scrim").hidden=false; render();
+  }
+
+  function paintSuperForm(P){
+    var host=document.getElementById("sheet"); clear(host); var sf=superForm;
+    host.append(elx("h3",{text:(sf.mode==="close"?"Завершить смену":"Поправить часы")+": "+sf.name}));
+    var f=elx("form",{class:"panel",style:"margin:0"});
+    var inStart=elx("input",{class:"ti",type:"datetime-local",value:dtLocal(sf.startMs),step:"300"});
+    var inEnd=elx("input",{class:"ti",type:"datetime-local",value:dtLocal(sf.endMs),step:"300"});
+    var inHours=elx("input",{class:"ti",type:"number",min:"0",max:"24",step:"0.25",value:(sf.secs/3600).toFixed(2)});
+    function recalc(){ var a=new Date(inStart.value).getTime(), b=new Date(inEnd.value).getTime();
+      if(!isNaN(a)&&!isNaN(b)&&b>a) inHours.value=((b-a)/3600000).toFixed(2); }
+    inStart.addEventListener("change",recalc); inEnd.addEventListener("change",recalc);
+    f.append(elx("div",{},[ elx("label",{class:"fl",text:"Начало смены"}), inStart ]));
+    f.append(elx("div",{style:"margin-top:10px"},[ elx("label",{class:"fl",text:"Конец смены"}), inEnd ]));
+    f.append(elx("div",{style:"margin-top:10px"},[ elx("label",{class:"fl",text:"Засчитать часов (без обеда)"}), inHours ]));
+    f.append(elx("div",{class:"note-info",style:"margin-top:12px"},[ico("info"),txt("Часы пересчитываются из начала и конца. Если был обед — уменьшите значение вручную.")]));
+    f.addEventListener("submit",function(e){ e.preventDefault();
+      var a=new Date(inStart.value).getTime(), b=new Date(inEnd.value).getTime(), h=parseFloat(String(inHours.value).replace(",","."));
+      if(isNaN(a)||isNaN(b)){ toast("Укажите начало и конец"); return; }
+      if(b<=a){ toast("Конец должен быть позже начала"); return; }
+      if(isNaN(h)||h<0) h=(b-a)/3600000;
+      superCommit(sf,{start:a,end:b,secs:Math.round(h*3600)});
+    });
+    f.append(btn("Сохранить","primary block",null)); var sub=f.querySelector(".btn.primary"); if(sub) sub.type="submit";
+    host.append(f);
+    if(sf.mode==="edit"){ host.append(btn("Удалить запись","danger block",function(){
+      askConfirm("Удалить смену","Удалить эту запись из истории сотрудника?","Удалить",function(){ superCommit(sf,null); }); })); }
+    host.append(btn("Назад","ghost block",function(){ var uid=sf.uid; superForm=null; superModal=uid; render(); }));
+  }
+
+  function superCommit(sf,entry){ // entry=null => удалить запись (режим edit)
+    if(!amAdmin){ toast("Только для старшего"); return; }
+    if(!rawDb){ toast("Обновите страницу"); return; }
+    var sRef=rawDb.collection("sessions").doc(sf.uid), rRef=rawDb.collection("roster").doc(sf.uid), now=Date.now();
+    writing=true; render();
+    rawDb.runTransaction(function(t){
+      return t.get(sRef).then(function(ss){
+        var data=(ss&&ss.exists)?ss.data():{}; var log=Array.isArray(data.log)?data.log.slice():[];
+        if(sf.mode==="edit"){ var idx=-1; for(var i=0;i<log.length;i++){ if(log[i]&&log[i].start===sf.origStart){ idx=i; break; } }
+          if(idx>=0){ if(entry) log[idx]=entry; else log.splice(idx,1); } else if(entry){ log.push(entry); } }
+        else if(entry){ log.push(entry); }
+        t.set(sRef,{log:log,updatedAt:now},{merge:true});
+        if(sf.mode==="close") t.set(rRef,{status:"off",lunch:false,workStart:null,shiftStart:null,shiftSecs:0,todaySecs:0,dayKey:todayKey(),updatedAt:now});
+        return null;
+      });
+    }).then(function(){ writing=false; var uid=sf.uid; superForm=null; superModal=uid; render();
+        toast(sf.mode==="close"?"Смена сотрудника завершена":(entry?"Часы обновлены":"Запись удалена")); })
+     .catch(function(e){ writing=false; render(); console.warn("superCommit",e);
+        toast(e&&e.code==="permission-denied"?"Нужны права старшего в базе — обновите правила Firestore":"Не удалось сохранить"); });
+  }
 
   // ---------- Календарь ----------
   function cap(s){ return s? s.charAt(0).toUpperCase()+s.slice(1):s; }
@@ -1153,7 +1269,7 @@
     sheet={pivotId:pivotId, targetId: p.userId===myId? null : p.userId, otherShiftId:"", noSwap:false, pickMonth:{y:pd.getFullYear(),m:pd.getMonth()}};
     document.getElementById("scrim").hidden=false; render();
   }
-  function closeModal(){ sheet=null; dayModal=null; confirmModal=null; editModal=null; hoursModal=null; document.getElementById("scrim").hidden=true; render(); }
+  function closeModal(){ sheet=null; dayModal=null; confirmModal=null; editModal=null; hoursModal=null; superModal=null; superForm=null; document.getElementById("scrim").hidden=true; render(); }
   document.getElementById("scrim").addEventListener("click",function(e){ if(e.target.id==="scrim") closeModal(); });
 
   function paintSheet(P){
