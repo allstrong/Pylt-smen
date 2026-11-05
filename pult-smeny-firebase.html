@@ -589,6 +589,9 @@
   function shiftLabel(id){ var s=schedule[id]; if(!s) return null; return s; }
   function liveToday(d){ if(!d) return 0; if(d.dayKey!==todayKey()) return 0; var base=d.todaySecs||0;
     if(d.status==="on"&&!d.lunch&&d.workStart){ var s=(Date.now()-d.workStart)/1000; if(s>0&&s<MAXSEG) base+=s; } return base; }
+  // Длительность ТЕКУЩЕЙ смены — считается от выхода на смену и не обнуляется в полночь (важно для ночных смен)
+  function liveShift(d){ if(!d||d.status==="off") return 0; var base=d.shiftSecs||0;
+    if(d.status==="on"&&!d.lunch&&d.workStart){ var s=(Date.now()-d.workStart)/1000; if(s>0&&s<MAXSEG) base+=s; } return base; }
   function incomingCount(){ var c=0; Object.keys(swaps).forEach(function(k){var s=swaps[k]; if(s.status==="pending"&&s.toId===myId)c++;}); return c; }
 
   function toMin(t){ if(!t)return 0; var p=String(t).split(":"); return (+p[0])*60+(+p[1]||0); }
@@ -642,7 +645,8 @@
       avatar(meP,myName),
       elx("div",{class:"me-id"},[ elx("div",{class:"lbl",text:"Ваш статус"}), elx("div",{class:"nm",text: myId?myName:"Гость"}) ]),
       elx("div",{class:"me-state"},[ elx("span",{class:"pill "+st,text:LABEL[st]}),
-        elx("div",{class:"me-timer"},[ txt("Сегодня на смене: "), elx("b",{text:fmtDur(liveToday(d))}) ]) ])
+        elx("div",{class:"me-timer"},[ txt(st!=="off"?"На смене уже: ":"Сегодня отработано: "),
+          elx("b",{text:fmtDur(st!=="off"?liveShift(d):liveToday(d))}) ]) ])
     ]));
     if(!db){ box.append(elx("div",{class:"note-info",style:"margin-top:16px"},[ico("info"),txt("Нет связи с базой. Обновите страницу.")])); return; }
     if(!myId){
@@ -788,8 +792,9 @@
     ids.forEach(function(id){ var d=roster[id],st=stateOf(d),nm=nameFor(P,id);
       var who=elx("div",{class:"who"}); var nmEl=elx("div",{class:"nm"}); nmEl.append(txt(nm)); if(id===myId) nmEl.append(elx("span",{class:"you",text:"вы"}));
       who.append(nmEl); who.append(elx("div",{class:"t",text: d.updatedAt?ago(d.updatedAt):""}));
+      var rtSecs=(st!=="off")?liveShift(d):liveToday(d);
       ul.append(elx("li",{class:"row"},[ avatar(P[id],nm), who,
-        elx("div",{class:"rt",text: liveToday(d)>30? fmtDur(liveToday(d)):""}),
+        elx("div",{class:"rt",text: rtSecs>30? fmtDur(rtSecs):""}),
         elx("span",{class:"pill "+st,text:LABEL[st]}) ]));
     });
     body.append(ul);
