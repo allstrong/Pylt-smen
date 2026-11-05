@@ -82,7 +82,7 @@
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,209,118,.5)}100%{box-shadow:0 0 0 7px rgba(47,209,118,0)}}
   @media (prefers-reduced-motion:reduce){.dot.anim{animation:none}}
 
-  .tabs{display:flex;gap:4px;margin-top:12px}
+  .tabs{display:flex;gap:4px;margin-top:12px;justify-content:center}
   .tab{position:relative;appearance:none;border:none;background:none;color:var(--fg-muted);font-size:13.5px;font-weight:600;white-space:nowrap;
     padding:10px 4px 12px;border-bottom:2px solid transparent;flex:1;max-width:170px;transition:color .15s}
   @media (max-width:380px){.tab{font-size:12.5px}}
@@ -111,7 +111,7 @@
   .me-state{margin-left:auto;text-align:right}
   .me-timer{font-family:var(--mono);font-size:13px;color:var(--fg-muted);font-variant-numeric:tabular-nums;margin-top:6px}
   .me-timer b{color:var(--fg);font-weight:600}
-  .actions{margin-top:16px;display:flex;flex-wrap:wrap;gap:10px}
+  .actions{margin-top:16px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
   .claim{margin-top:16px;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:13px}
   .claim-t{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--fg-muted);margin-bottom:10px}
   .claim-t .ic{width:16px;height:16px;color:var(--accent)}
@@ -702,28 +702,30 @@
     if(!db){ body.append(skeleton(3)); return; }
     if(!myId){ body.append(elx("div",{class:"empty"},[txt("Часы считаются после входа в аккаунт.")])); return; }
 
-    var tk=todayKey(), sess=(sessions[myId]&&sessions[myId].days)||{};
+    var tk=todayKey();
     var mon=mondayOf(new Date());
     var DOW=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
     var wk=elx("div",{class:"wk"}); var weekSecs=0;
     for(var i=0;i<7;i++){ (function(i){
       var dd=new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+i); var key=dateKey(dd);
       var isToday=key===tk, isFuture=key>tk;
-      var sh=shiftOnFor(myId,key); var k=sh?kindOf(sh.start):null;
-      var secs=0;
-      if(isToday) secs=liveToday(roster[myId]);
-      else if(sess[key]!=null) secs=sess[key];
-      else if(sh && !isFuture) secs=shiftHours(sh)*3600;
-      else if(sh && isFuture) secs=shiftHours(sh)*3600; // план на будущее
+      var sh=shiftOnFor(myId,key);
+      // Часы берём из журнала смен (как в «Истории») — смена целиком относится к дню старта.
+      var dayShifts=shiftsForDay(key);
+      var secs=0, hasActual=dayShifts.length>0;
+      if(hasActual){ dayShifts.forEach(function(x){ secs+=x.secs; }); }
+      else if(sh) secs=shiftHours(sh)*3600; // нет фактических отметок — показываем план из графика
+      // тип (день/ночь): из графика, иначе из фактической смены
+      var k = sh? kindOf(sh.start) : (hasActual? (function(){ var d0=new Date(dayShifts[0].start); return kindOf(pad(d0.getHours())+":"+pad(d0.getMinutes())); })() : null);
       if(!isFuture) weekSecs+=secs;
-      var tappable=!!(sh || shiftsForDay(key).length || (isToday && secs>30));
+      var tappable=!!(sh || hasActual);
       var cell=elx("div",{class:"wkd"+(isToday?" today":"")+(isFuture?" future":"")+(k?(" "+k):"")+(tappable?" tap":""),
         onclick: tappable? (function(kk){ return function(){ openHours(kk); }; })(key) : null,
         role: tappable?"button":null, tabindex: tappable?"0":null, title: tappable?"Показать начало и конец смены":null });
       if(tappable) cell.addEventListener("keydown",function(ev){ if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); this.click(); } });
       cell.append(elx("div",{class:"wd",text:DOW[i]}));
       cell.append(elx("div",{class:"wn",text:String(dd.getDate())}));
-      if(sh){ cell.append(ico(k==="night"?"moon":"sun","wk-ic")); cell.append(elx("div",{class:"wh",text: secs>30? Math.round(secs/3600)+"ч":"—"})); }
+      if(sh || hasActual){ if(k) cell.append(ico(k==="night"?"moon":"sun","wk-ic")); cell.append(elx("div",{class:"wh",text: secs>30? Math.round(secs/3600)+"ч":"—"})); }
       else { cell.append(elx("div",{class:"wdash",text:"·"})); }
       wk.append(cell);
     })(i); }
